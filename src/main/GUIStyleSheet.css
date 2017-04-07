@@ -1,0 +1,282 @@
+/*
+ROOT ------------------------------------------------
+*/ 
+.root{
+    -fx-font-family: "WBHelveticaNeueMedium" ;
+ 	-fx-background-color: transparent;	
+	-fx-base: white; 
+	-fx-border-width: 0;
+	
+	/*Global variables */
+	-title-hbox-color: rgba(0,0,0,.8);
+	
+	-button-background-color: derive(-title-hbox-color, 0%);
+	-button-label-color: rgb(230,230,230); 
+	-button-label-focus-color: rgb(255,255,255);
+}
+
+.context-menu { 
+	-fx-effect: null;  
+	-fx-background-color: derive(-title-hbox-color, 0%);
+	-fx-border-width: 0px ;
+}
+
+
+/*
+ * MENU AND MENU BAR --------------------------------------------------------
+ */
+ .menu-bar { 
+ 	-fx-background-color: rgba(0,0,0,.8); 
+ 	-fx-padding: 0 0 0 0; 
+ }
+
+.menu-bar .menu-button { 
+	-fx-padding: 2 8 2 8;
+}
+
+ .menu-bar .menu-button .label { 
+ 	-fx-text-fill: white; 
+ }
+ 
+ .menu-bar .menu-button:showing { 
+ 	-fx-background-color: black;
+ }
+ 
+ .menu-bar .menu-button:showing .label {
+	-fx-text-fill: white;
+ }
+ 
+ .menu-bar .menu-button:hover { 
+ 	-fx-background-color: black;
+ }
+ 
+ .menu-bar .menu-button .context-menu { 
+ 	-fx-padding: 2 0 0 0;
+ 	-fx-background-color: transparent;
+ }
+ 
+ .menu-bar .menu-button .context-menu .label { 
+	-fx-font-size: 12px ; 
+	-fx-font-weight: normal; 
+	-fx-text-fill: rgb(230,230,230)  ; 
+	-fx-padding: 0;
+ }
+ 
+ .menu-bar .menu-item {
+ 	-fx-padding: 5 8 5 8;
+ 	-fx-background-color: derive(-title-hbox-color, 0%);
+ }
+ 
+ .menu-bar .menu-item .text{
+ 	-fx-font-size: 11;
+ }
+ 
+ .menu-bar .menu-item:focused { 	
+	-fx-background-color: black;
+ }
+ 
+ .menu-bar .menu-item:focused .label { 
+    -fx-text-fill: white;   
+ }
+ 
+.context-menu .separator .line {
+    -fx-border-color: rgb(100,100,100) transparent transparent transparent;
+    -fx-padding: 1 0 0 0;
+ 	-fx-background-color: derive(-title-hbox-color, 0%);
+ }
+ 
+ .menu-bar .menu-item:disabled { 
+ 	-fx-opacity: 1;
+ }
+ 
+ .menu-bar .menu-item:disabled .label{ 
+ 	-fx-opacity: 0.4;
+ }
+ 
+ 
+ 
+ /*
+TITLED PANE -----------------------------------------------------------
+*/
+.titled-pane .title {
+  -fx-background-color: white ;
+  -fx-border-color: black; 
+  -fx-border-width: 0 0 2 0;
+  -fx-padding: 3 5 3 -12; /* 2 14 3 0 */
+  -fx-background-radius: 0;
+  /*-fx-background-insets: 0 2 0 0;*/ 
+}
+
+.titled-pane .title .text {
+  -fx-font-size: 12px;
+  -fx-font-weight: 700 ; 
+  -fx-fill: black ;
+}
+
+.titled-pane .content {
+  -fx-background-color: transparent;
+  -fx-border-width: 0px ;
+}
+
+.titled-pane .title .arrow-button .arrow {
+  -fx-effect: null; 
+  -fx-background-color: transparent;
+  -fx-border-width: 0px; 
+  -fx-border-color: transparent ;
+}
+
+.titled-pane .title:focused .arrow-button .arrow {
+  -fx-border-width: 0px; 
+}
+
+
+
+/*
+ * LIST VIEW ------------------------------------------------------------
+ */
+ .list-view {
+    
+    -fx-background-color: transparent; 
+    -fx-effect: null ; 
+    -fx-border-width: 0px; 
+    -fx-background-radius: 0px; 
+}
+
+.list-view .list-cell  { 
+    -fx-background-color: transparent; 
+     -fx-effect: null ; 
+    -fx-border-width: 0px; 
+}
+
+.list-view .list-cell:selected  { 
+    -fx-background-color: rgb(200,200,200); 
+}
+ 
+ 
+ /*
+  * CHECK BOX -----------------------------------------------------------
+  */
+
+.check-box { 
+    -fx-padding: -1 0 0 -1; 
+}
+
+.check-box .box { 
+    -fx-background-color: transparent; 
+    -fx-background-radius: 0px; 
+}
+
+.check-box:selected .mark {
+    -fx-background-color: black;
+    -fx-stroke: black;
+    -fx-stroke-width: 1px;
+    -fx-background-insets: 3 ;
+    -fx-shape: "M4,4L4,6L6,6L6,4Z";
+}
+
+
+ /*
+  * RADIO BUTTON -----------------------------------------------------------
+  */
+
+.radio-button { 
+    -fx-padding: -1 0 0 -1; 
+}
+
+.radio-button .radio { 
+    -fx-background-color: transparent; 
+    -fx-background-radius: 0px; 
+}
+
+.radio-button:selected .dot {
+	
+    -fx-background-color: white;
+    -fx-stroke: black;
+    -fx-stroke-width: 0px;
+    -fx-background-insets: 2px ;
+}
+
+
+
+/*
+ * TOGGLE BUTTON ---------------------------------------------------------
+ */
+.button {
+	-fx-background-color: derive(-button-background-color, 0%);
+    -fx-background-radius: 0px;
+    -fx-border-width: 0px;
+    
+    -fx-font-size: 12px ; 
+    -fx-font-weight: 600; 
+    -fx-text-fill: derive(-button-label-color, 0%);
+}
+
+.button:armed {
+    -fx-text-fill: derive(-button-label-focus-color, 0%);
+}
+
+
+/*
+ * LINE CHART ------------------------------------------------------------
+ */
+.chart-line-symbol {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0px;
+}
+.chart-series-line {
+    -fx-stroke: rgb(30,30,30);
+    -fx-stroke-width: 2px;
+}
+
+.chart {
+    -fx-padding: 0px;
+}
+
+.chart-horizontal-grid-lines,  
+.chart-vertical-grid-lines {  
+    -fx-stroke-width: 0px;  
+} 
+
+.axis {
+    -fx-font-size: 12px;    
+    -fx-tick-label-fill: black;
+    -fx-tick-length: 2;
+    -fx-minor-tick-length: 1;
+}
+
+.chart-legend {
+   -fx-background-color: transparent;
+   -fx-background-insets: 0;
+   -fx-background-radius: 0;
+   -fx-padding: 0px;
+}
+
+
+
+/*
+ * LEGEND ----------------------------------------------------------------
+ */
+.legend .label{ 
+	-fx-font-size: 10px; 
+}
+
+.legend-title { 
+	-fx-font-size: 11px; 
+  	-fx-font-weight: 700 ; 
+  	-fx-fill: black ;
+}
+ 
+ 
+ /*
+  * SIDE BAR -------------------------------------------------------------
+  */
+ .sidebar {
+ 	-fx-background-color: transparent;   
+    -fx-spacing: 8;
+    -fx-padding: 8;
+ }
+ 
+ .sidebar-contentpane { 
+ 	-fx-background-color: white;   
+ }
+ 
