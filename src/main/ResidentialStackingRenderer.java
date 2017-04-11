@@ -2,16 +2,21 @@ package main;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
+import java.awt.datatransfer.FlavorTable;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import javax.media.opengl.GL2;
+
+import com.jogamp.graph.geom.opengl.SVertex;
 
 import cdr.fileIO.dxf2.DXFDocument2;
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Polygon3D;
+import cdr.geometry.primitives.Rectangle2D;
 import cdr.geometry.renderer.GeometryRenderer;
 import cdr.joglFramework.camera.GLCamera;
 import cdr.joglFramework.camera.GLCameraAxonometric;
@@ -19,31 +24,19 @@ import cdr.joglFramework.event.KeyEvent;
 import cdr.joglFramework.event.listener.impl.SimpleKeyListener;
 import cdr.joglFramework.frame.GLFramework;
 import cdr.joglFramework.renderer.OpaqueRendererWithGUI;
-import cdr.mesh.datastructure.Mesh3D;
-import cdr.mesh.datastructure.fvMesh.FVMeshFactory;
-import cdr.spacepartition.boundingObjects.BoundingBox2D;
 import fileio.CsvReader;
 import fileio.FileDialogs;
+import geometry.PolygonApproximationRectangular;
 import javafx.application.Platform;
-import javafx.scene.control.TextInputDialog;
-import main.FloorFactory.Floor;
-import model.EvaluatedBoundary;
-
-
 
 public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 	GeometryRenderer gr = new GeometryRenderer();
-	
-	/*
-	 * Model
-	 */
-	
-	public List<Polygon3D> boundaries = new ArrayList<>();
-	public List<Floor> floors = new ArrayList<>();
-	
-	public FloorFactory floorFactory;
-	
+	StackViewer sv = new StackViewer();
+	StackManager sm;
+	StackEvaluator se;
+	BlockManager bm;
+		
 	@Override
 	protected GLCamera createCamera(GLFramework framework) {
 		return new GLCameraAxonometric(framework);
@@ -57,7 +50,6 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	@Override
 	protected void renderFill(GL2 gl) {
-		// TODO Auto-generated method stub
 		super.renderFill(gl);
 	}
 
@@ -67,19 +59,29 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		gl.glLineWidth(1.0f);
 		gl.glColor3f(0f, 0f, 0f);
 		
-		gr.renderPolygons3DLines(gl, boundaries);
-		
-		renderStacks(gl);
+		if (sm != null) {
+			renderStacks(gl);
+		}
 	}
 	
 	private void renderStacks(GL2 gl) {
 		
-
+		gr.renderPolygons3DLines(gl, sm.getBoundaries());
+		
+		for (String type : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(type)) {
+				gr.renderPolygons3DLines(gl, 
+						sv.getViewableStack(
+								footprint, 
+								sm.getStack(footprint), 
+								se.floorToCeilingHeight));
+			}
+		}
 	}
 
 	@Override
 	public void initialiseRenderer(GLFramework framework) {
-		// TODO Auto-generated method stub
+
 		super.initialiseRenderer(framework);
 	
 		framework.getKeyListeners().add(new SimpleKeyListener(){
@@ -91,56 +93,77 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					Platform.runLater(new Runnable() {
 						
 						public void run() {
-							
-							boundaries.clear();			
-							floorFactory = new FloorFactory();
-							
-							System.out.println("import");
-							
-							File file = FileDialogs.openFileFX("dxf");
-							
-							if(file != null) {
-								
-								DXFDocument2 dxf = new DXFDocument2(file);	
-								dxf.getPolygons3D("BOUNDARY", boundaries);
-												
-								for (String layerName : dxf.getLayerNames()) {
-									
-									if (layerName.contains("FOOTPRINT$")) {
-										
-										String[] layerString = layerName.split("\\$");
-										String type = layerString[1];
-										
-										List<Polygon3D> polygons = new ArrayList<>();
-										
-										dxf.getPolygons3D(layerName, polygons);
-										
-										if (polygons.size() == 1) {
-											floorFactory.addFootprint(type, polygons.get(0));
-										} else {
-											System.out.println("incorrect number of footprints... ignoring");
-										}
-									}
-								}
-							}
+
+							sm = new StackManager();
+							se = new StackEvaluator();
+														
+							importDXF();
 						}
 					});
 				}
-								
-				if (e.getKeyChar() == 'b') {
+				
+				if (e.getKeyChar() == 'd') {
 					
-					build();
+					Platform.runLater(new Runnable() {
+						
+						@Override
+						public void run() {
+							
+							bm = new BlockManager();
+							
+							importCSV();
+						}
+					});
 				}
-								
+																
 				if (e.getKeyChar() == 'e') {
 					
-					evaluate();
+					Platform.runLater(new Runnable() {
+						
+						@Override
+						public void run() {
+							
+							se.buildStackMix(sm, bm);
+						}
+					});
 				}
 			}
 		});
 	}
+			
+	private void importDXF() {
+		
+		Platform.runLater(new Runnable() {
+			
+			@Override
+			public void run() {
+
+				File file = FileDialogs.openFileFX("dxf");
+				
+				if(file != null) {
+					
+					DXFDocument2 dxf = new DXFDocument2(file);	
+					dxf.getPolygons3D("BOUNDARY", sm.getBoundaries());
+									
+					for (String layerName : dxf.getLayerNames()) {
+						
+						if (layerName.contains("FOOTPRINT$")) {
+							
+							String[] layerString = layerName.split("\\$");
+							String footprintType = layerString[1];
+							
+							List<Polygon3D> polygons = new ArrayList<>();
+												
+							dxf.getPolygons3D(layerName, polygons);
+							sm.addFootPrint(footprintType, polygons);
+						}
+					}
+				}	
+			}
+		});
+	}
 	
-	private void build() {
+	private void importCSV() {
 		
 		Platform.runLater(new Runnable() {
 			
@@ -152,30 +175,25 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				if (file != null) {
 					
 					List<String[]> lines = CsvReader.getCSVLines(file);
+					String[] keys = lines.get(0);
 					lines.remove(0);
 					
 					for(String [] line : lines) {
 						
-						String type = line[0];
-										
-						float cost = Float.parseFloat(line[1]);
-						float premium = Float.parseFloat(line[2]);
-						
-						floorFactory.addCost(type, cost);
-						floorFactory.addPremium(type, premium);
-					}
-				}
-			}
-		});
-	}
-	
-	private void evaluate() {
-		
-		Platform.runLater(new Runnable() {
-			
-			@Override
-			public void run() {
+						String unitType = line[0];
 
+						for (int i = 1; i<line.length-1; i++) {
+							
+							String[] val = keys[i].split("-");
+														
+							String footprintType = val[0];
+							String propertyType = val[1];
+							Float propertyValue = Float.parseFloat(line[i]);
+							
+							bm.addValue(footprintType, unitType, propertyType, propertyValue);
+						}
+					}	
+				}
 			}
 		});
 	}
