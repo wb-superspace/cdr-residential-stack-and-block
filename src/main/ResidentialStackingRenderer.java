@@ -123,7 +123,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						@Override
 						public void run() {
 							
-							se.buildStackMix(sm, bm);
+							se.evaluate(sm, bm);
 						}
 					});
 				}
@@ -181,17 +181,11 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					for(String [] line : lines) {
 						
 						String unitType = line[0];
+						Integer unitCount = Integer.parseInt(line[1]);
+						Float unitArea = Float.parseFloat(line[2]);
+						Float unitValue = Float.parseFloat(line[3]);
 
-						for (int i = 1; i<line.length-1; i++) {
-							
-							String[] val = keys[i].split("-");
-														
-							String footprintType = val[0];
-							String propertyType = val[1];
-							Float propertyValue = Float.parseFloat(line[i]);
-							
-							bm.addValue(footprintType, unitType, propertyType, propertyValue);
-						}
+						bm.addUnit(unitType, unitCount, unitArea, unitValue);
 					}	
 				}
 			}

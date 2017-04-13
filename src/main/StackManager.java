@@ -17,7 +17,11 @@ public class StackManager {
 	private Map<Polygon3D, Stack<List<String>>> stacks = new HashMap<>();
 			
 	public Set<String> getFootprintTypes() {
-		return footprints.keySet();
+		return this.footprints.keySet();
+	}
+	
+	public String getFootprintType(Polygon3D footprint) {
+		return this.types.get(footprint);
 	}
 	
 	public void addFootPrint(String footprintType, List<Polygon3D> footprints) {
@@ -29,16 +33,25 @@ public class StackManager {
 		}
 	}
 	
-	public void pushFloor(String footprintType, List<String> floorMix) {
-		this.stacks.get(footprintType).push(floorMix);
+	public void pushFloor(Polygon3D footprint, List<String> floorMix) {
+		this.stacks.get(footprint).push(floorMix);
 	}
 	
-	public List<String> popFloor(String footprintType) {
-		return this.stacks.get(footprintType).pop();
+	public List<String> popFloor(Polygon3D footprint) {
+		return this.stacks.get(footprint).pop();
+	}
+	
+	public void swapFloor(Polygon3D f1, Integer i1, Polygon3D f2, Integer i2) {
+		
+		List<String> u1 = new ArrayList<>(stacks.get(f1).get(i1));
+		List<String> u2 = new ArrayList<>(stacks.get(f2).get(i2));
+		
+		stacks.get(f1).set(i2, u1);
+		stacks.get(f1).set(i1, u2);
 	}
 		
 	public List<Polygon3D> getFootprints (String footprintType) {
-		return footprints.get(footprintType);
+		return this.footprints.get(footprintType);
 	}
 	
 	public Stack<List<String>> getStack(Polygon3D footprint) {
