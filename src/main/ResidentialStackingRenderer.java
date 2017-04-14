@@ -11,8 +11,9 @@ import java.util.HashSet;
 
 import javax.media.opengl.GL2;
 
-import com.jogamp.graph.geom.opengl.SVertex;
-
+import com.jogamp.graph.geom.opengl.SVertex;import cdr.colour.Colour;
+import cdr.colour.HEXColour;
+import cdr.colour.HSVColour;
 import cdr.fileIO.dxf2.DXFDocument2;
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Polygon3D;
@@ -24,6 +25,8 @@ import cdr.joglFramework.event.KeyEvent;
 import cdr.joglFramework.event.listener.impl.SimpleKeyListener;
 import cdr.joglFramework.frame.GLFramework;
 import cdr.joglFramework.renderer.OpaqueRendererWithGUI;
+import cdr.mesh.renderer.MeshRenderer3DFlatShaded;
+import cdr.mesh.renderer.MeshRenderer3DOutline;
 import fileio.CsvReader;
 import fileio.FileDialogs;
 import geometry.PolygonApproximationRectangular;
@@ -32,7 +35,7 @@ import javafx.application.Platform;
 public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 	GeometryRenderer gr = new GeometryRenderer();
-	StackViewer sv = new StackViewer();
+	StackViewer sv;
 	StackManager sm;
 	StackEvaluator se;
 	BlockManager bm;
@@ -50,35 +53,72 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	@Override
 	protected void renderFill(GL2 gl) {
-		super.renderFill(gl);
+		
+		MeshRenderer3DFlatShaded mr = new MeshRenderer3DFlatShaded();
+						
+		if (sv != null) {
+
+			for (String type : sm.getFootprintTypes()) {
+				for (Polygon3D footprint : sm.getFootprints(type)) {
+					
+					for (Map.Entry<String, List<Polygon3D>> unitFaces : sv.getViewableStackUnits(
+							footprint, 
+							sm.getStack(footprint), 
+							se.floorToCeilingHeight).entrySet()) {
+						
+
+						HEXColour colour = new HEXColour(unitFaces.getKey());
+						gl.glColor3f(colour.red(), colour.green(), colour.blue());
+						
+						gr.renderPolygons3DFill(gl, unitFaces.getValue());
+						
+						gl.glLineWidth(0.1f);
+						gl.glColor3f(0f, 0f, 0f);
+						
+						gr.renderPolygons3DLines(gl, unitFaces.getValue());
+					}
+				}
+			}
+		}
 	}
 
 	@Override
 	protected void renderLines(GL2 gl) {
 		
+		MeshRenderer3DOutline mr = new MeshRenderer3DOutline();
+		
 		gl.glLineWidth(1.0f);
 		gl.glColor3f(0f, 0f, 0f);
 		
-		if (sm != null) {
-			renderStacks(gl);
-		}
-	}
-	
-	private void renderStacks(GL2 gl) {
-		
-		gr.renderPolygons3DLines(gl, sm.getBoundaries());
-		
-		for (String type : sm.getFootprintTypes()) {
-			for (Polygon3D footprint : sm.getFootprints(type)) {
-				gr.renderPolygons3DLines(gl, 
-						sv.getViewableStack(
-								footprint, 
-								sm.getStack(footprint), 
-								se.floorToCeilingHeight));
+		if (sv != null) {
+						
+			gr.renderPolygons3DLines(gl, sm.getBoundaries());
+			
+			for (String type : sm.getFootprintTypes()) {
+				for (Polygon3D footprint : sm.getFootprints(type)) {
+									
+//					gr.renderPolygons3DLines(gl, 
+//							sv.getViewableStack(
+//									footprint, 
+//									sm.getStack(footprint), 
+//									se.floorToCeilingHeight));
+										
+//					gr.renderPolygons3DLines(gl, 
+//							sv.getViewableStackUnits(
+//									footprint, 
+//									sm.getStack(footprint), 
+//									se.floorToCeilingHeight));
+					
+//					mr.renderEdges(gl, sv.getViewableStackUnits(
+//							footprint, 
+//							sm.getStack(footprint), 
+//							se.floorToCeilingHeight));
+			
+				}
 			}
 		}
 	}
-
+	
 	@Override
 	public void initialiseRenderer(GLFramework framework) {
 
@@ -96,6 +136,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 							sm = new StackManager();
 							se = new StackEvaluator();
+							sv = new StackViewer();
 														
 							importDXF();
 						}
@@ -158,6 +199,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							sm.addFootPrint(footprintType, polygons);
 						}
 					}
+					
+					sv.setStackManager(sm);
 				}	
 			}
 		});
@@ -184,9 +227,12 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						Integer unitCount = Integer.parseInt(line[1]);
 						Float unitArea = Float.parseFloat(line[2]);
 						Float unitValue = Float.parseFloat(line[3]);
+						String unitColor = line[4];
 
-						bm.addUnit(unitType, unitCount, unitArea, unitValue);
-					}	
+						bm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
+					}
+					
+					sv.setBlockManager(bm);
 				}
 			}
 		});

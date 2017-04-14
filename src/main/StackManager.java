@@ -33,10 +33,10 @@ public class StackManager {
 		}
 	}
 	
-	public void pushFloor(Polygon3D footprint, List<String> floorMix) {
-		this.stacks.get(footprint).push(floorMix);
+	public void pushFloor(Polygon3D footprint, List<String> floor) {
+		this.stacks.get(footprint).push(floor);
 	}
-	
+		
 	public List<String> popFloor(Polygon3D footprint) {
 		return this.stacks.get(footprint).pop();
 	}
@@ -46,16 +46,27 @@ public class StackManager {
 		List<String> u1 = new ArrayList<>(stacks.get(f1).get(i1));
 		List<String> u2 = new ArrayList<>(stacks.get(f2).get(i2));
 		
-		stacks.get(f1).set(i2, u1);
+		stacks.get(f2).set(i2, u1);
 		stacks.get(f1).set(i1, u2);
 	}
-		
+	
+//	public void insertFloor(Polygon3D fromFootprint, Integer fromIndex, Polygon3D toFootprint, Integer toIndex) {
+//		
+//		List<String> floor = stacks.get(fromFootprint).get(fromIndex);
+//		stacks.get(fromFootprint).remove(fromIndex);
+//		stacks.get(toFootprint).insertElementAt(floor, toIndex);
+//	}
+			
 	public List<Polygon3D> getFootprints (String footprintType) {
 		return this.footprints.get(footprintType);
 	}
 	
 	public Stack<List<String>> getStack(Polygon3D footprint) {
 		return this.stacks.get(footprint);
+	}
+	
+	public void setStack(Polygon3D footprint, Stack<List<String>> stack) {
+		stacks.put(footprint, stack);
 	}
 	
 	public List<Polygon3D> getBoundaries() {

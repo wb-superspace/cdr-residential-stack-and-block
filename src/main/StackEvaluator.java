@@ -1,15 +1,24 @@
 package main;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
 import java.util.Stack;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import com.sun.org.apache.bcel.internal.generic.IF_ACMPEQ;
 
 import cdr.geometry.primitives.Polygon3D;
 
 public class StackEvaluator {
 	
-	public float floorCost = 300f;
-	public float floorCostMultiplier = 0.01f;
+	public float floorCost = 600f;
+	public float floorCostMultiplier = 0.02f;
 	
 	public float unitValueThreshold = 2700000f;	
 	public float unitPremiumFloorMultiplier = 0.03f;
@@ -21,6 +30,8 @@ public class StackEvaluator {
 	
 	private StackManager sm;
 	private BlockManager bm;
+	
+	private Map<Polygon3D, Stack<List<String>>> restore;
 	
 	private float evaluateFloorValue(Polygon3D footprint, List<String> floor, float floorIndex) {
 		
@@ -46,12 +57,12 @@ public class StackEvaluator {
 		return totalFloorValue - totalFloorCost;
 	}
 	
-	private float evaluateStackValue(Polygon3D footprint) {
+	private float evaluateStackValue(Polygon3D footprint, List<List<String>> stack) {
 		
 		float value = 0;
 		
-		for (int i = 0; i<sm.getStack(footprint).size(); i++) {
-			value += evaluateFloorValue(footprint, sm.getStack(footprint).get(i), i+1);
+		for (int i = 0; i<stack.size(); i++) {
+			value += evaluateFloorValue(footprint, stack.get(i), i+1);
 		}
 				
 		return value;
@@ -63,11 +74,9 @@ public class StackEvaluator {
 		
 		for (String footprintType : sm.getFootprintTypes()) {
 			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-				value += evaluateStackValue(footprint);
+				value += evaluateStackValue(footprint, sm.getStack(footprint));
 			}
 		}
-		
-		System.out.println("total value: " + value);
 		
 		return value;
 	}
@@ -106,28 +115,54 @@ public class StackEvaluator {
 			
 	private void print() {
 	
-	System.out.println();
-	System.out.println();
-	System.out.println("total area: " + evaluateTotalArea());
-	System.out.println("total value: " + evaluateTotalValue());
-	System.out.println();
-	for (String unitType : bm.getUnitTypes()) {
-		System.out.println(unitType + " : " + evaluateTotalUnitCount(unitType));
-	}
-	System.out.println();
-	for (String footprintType : sm.getFootprintTypes()) {
 		System.out.println();
-		System.out.println(footprintType);
-		for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-			System.out.println("------");
-			System.out.println("height : " + sm.getStack(footprint).size() * floorToCeilingHeight);
-			for (List<String> floorMix : sm.getStack(footprint)) {
-				System.out.println(floorMix);
+		System.out.println();
+		System.out.println("total area: " + evaluateTotalArea());
+		System.out.println("total value: " + evaluateTotalValue());
+		System.out.println();
+		for (String unitType : bm.getUnitTypes()) {
+			System.out.println(unitType + " : " + evaluateTotalUnitCount(unitType));
+		}
+		System.out.println();
+		for (String footprintType : sm.getFootprintTypes()) {
+			System.out.println();
+			System.out.println(footprintType);
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				System.out.println("------");
+				System.out.println("height : " + sm.getStack(footprint).size() * floorToCeilingHeight);
+				for (List<String> floorMix : sm.getStack(footprint)) {
+					System.out.println(floorMix);
+				}
 			}
 		}
 	}
-}
 	
+	private boolean isPushFloorValid(Polygon3D from , Polygon3D to) {
+		
+		float height = floorToCeilingHeight * (sm.getStack(to).size() + 1);
+		float area = evaluateTotalArea() - from.area() + to.area();
+		
+		return (height < maxHeight && area < maxArea);
+	}
+	
+	private boolean isSwapFloorValid(Polygon3D from, Polygon3D to) {
+		
+		float fromHeight = floorToCeilingHeight * (sm.getStack(from).size());
+		float toHeight = floorToCeilingHeight * (sm.getStack(to).size());
+		
+		float area = evaluateTotalArea() - from.area() - to.area();
+		
+		float addFromHeight = (float) Math.ceil(to.area() / from.area());
+		fromHeight += addFromHeight * floorToCeilingHeight;
+		
+		float addToHeight = (float) Math.ceil(from.area() / to.area());
+		toHeight += addToHeight * floorToCeilingHeight;
+		
+		area += addToHeight * to.area() + addFromHeight * from.area();
+		
+		return (toHeight <= maxHeight && fromHeight <= maxHeight && area <= maxArea);
+	}
+		
 	private boolean fitUnit(Polygon3D footprint, List<String> floor, String unit) {
 		
 		float area = footprint.area() - bm.getUnit(unit).area;
@@ -147,8 +182,17 @@ public class StackEvaluator {
 		
 		this.bm = bm;
 		this.sm = sm;
+		this.restore = new HashMap<>();
 		
-		Polygon3D footprint = sm.getFootprints(sm.getFootprintTypes().iterator().next()).get(0);
+		List<Polygon3D> footprints = new ArrayList<>();
+		
+		for (String footprintType : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				restore.put(footprint, new Stack<>());
+				sm.getStack(footprint).clear();
+				footprints.add(footprint);
+			}
+		}
 		
 		List<String> units = new ArrayList<>();
 		for (String unitType : bm.getUnitTypes()) {
@@ -157,7 +201,23 @@ public class StackEvaluator {
 			}
 		}
 		
-		fillStack(footprint, units);	
+		int j = (int) Math.ceil((double)units.size() / (double)footprints.size());
+				
+		for (int i = 0; i<footprints.size(); i++) {
+			
+			int count = j;
+			
+			if ((i*j) + count >= units.size()) {
+				count = units.size() - (i*j);
+			}
+			
+			int f = (i*j);
+			int t = (i*j) + count;
+						
+			List<String> chunk = units.subList(f,t);
+			
+			fillStack(footprints.get(i), chunk);
+		}
 	}
 	
 	private void fillStack(Polygon3D footprint, List<String> units) {
@@ -181,492 +241,194 @@ public class StackEvaluator {
 			}
 		}
 		
-		print();
+		for (int i=0; i<sm.getStack(footprint).size(); i++) {
+			for (int j = i+1; j<sm.getStack(footprint).size(); j++) {
+				
+				float v1 = evaluateFloorValue(footprint, sm.getStack(footprint).get(i), i);
+				float v2 = evaluateFloorValue(footprint, sm.getStack(footprint).get(j), i);
+				
+				if (v1 > v2) {
+					sm.swapFloor(footprint, i, footprint, j);
+				}
+			}
+		}
+	}
+	
+	private void applyStacks() {
+		
+		for (String footprintType : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				
+				List<String> units = sm.getStack(footprint)
+						.stream()
+                        .flatMap(l -> l.stream())
+                        .collect(Collectors.toList());
+				
+				fillStack(footprint, units);
+			}
+		}
+	}
+	
+	private void saveStacks() {
+		
+		for (String footprintType : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				restore.get(footprint).clear();
+				for (List<String> floor : sm.getStack(footprint)) {
+					restore.get(footprint).add(new ArrayList<>(floor));
+				}
+			}
+		}
+	}
+	
+	private void restoreStacks() {
+		
+		for (String footprintType : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				sm.setStack(footprint, restore.get(footprint));
+				restore.put(footprint, new Stack<>());
+			}
+		}
+	}
+	
+	private Map<Polygon3D, Stack<List<String>>> saveState() {
+		
+		Map<Polygon3D, Stack<List<String>>> state = new HashMap<>();
+		
+		for (String footprintType : sm.getFootprintTypes()) {
+			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+				
+				Stack<List<String>> stack = new Stack<>();
+				
+				for (List<String> floor : sm.getStack(footprint)) {
+					stack.add(new ArrayList<>(floor));
+				}
+				
+				state.put(footprint, stack);
+			}
+		}
+		
+		return state;
+	}
+	
+	private void restoreState(Map<Polygon3D, Stack<List<String>>> state) {
+		
+		for (Map.Entry<Polygon3D, Stack<List<String>>> entry : state.entrySet()) {
+			sm.setStack(entry.getKey(), entry.getValue());
+		}
 	}
 	
 	public void evaluate(StackManager sm, BlockManager bm) {
 		
 		initialize(sm, bm);
-	}
-	
-//	private boolean isUnitMixValid(Polygon3D footprint, List<String> units) {
-//	
-//	float area = footprint.area();
-//	
-//	for (String unitType : units) {
-//		area -= bm.getUnit(unitType).area;
-//	}
-//	
-//	return area >= 0;
-//}
-//
-//private boolean isPushFloorValid(Polygon3D from , Polygon3D to) {
-//	
-//	float height = floorToCeilingHeight * (sm.getStack(to).size() + 1);
-//	float area = evaluateTotalArea() - from.area() + to.area();
-//	
-//	return (height < maxHeight && area < maxArea);
-//}
-//
-//private boolean isStackMixValid() {
-//	
-//	for (String unitType : bm.getUnitTypes()) {
-//		if (bm.getUnit(unitType).count < evaluateTotalUnitCount(unitType)) {
-//			return false;
-//		}
-//	}
-//	
-//	return true;
-//}
-//
-//	private List<List<String>> buildUnitCombinatrix(String footprintType, Polygon3D footprint, List<List<String>> combinations) {
-//		
-//		List<List<String>> combinatrix = new ArrayList<>();
-//		
-//		for (List<String> combination : combinations) {
-//			
-//			List<List<String>> tests = new ArrayList<>();
-//			
-//			for (String unitType : bm.getUnitTypes()) {
-//												
-//				List<String> test = new ArrayList<>(combination);
-//				test.add(unitType);
-//						
-//				if (isUnitMixValid(footprint, test)) {
-//					tests.add(test);
-//				}			
-//			}
-//			
-//			if (tests.isEmpty()) {
-//				combinatrix.add(combination);
-//			} else {
-//				combinatrix.addAll(buildUnitCombinatrix(footprintType, footprint, tests));
-//			}
-//		}
-//		
-//		return combinatrix;
-//	}
-//	
-//	private void buildStack(Polygon3D footprint) {
-//		
-//		List<List<String>> combinatrix = new ArrayList<>();
-//		for (String unitType : bm.getUnitTypes()) {
-//			combinatrix.add(Arrays.asList(unitType));
-//		}
-//		
-//		combinatrix = buildUnitCombinatrix(sm.getFootprintType(footprint), footprint, combinatrix);
-//				
-//		Stack<List<String>> stack = sm.getStack(footprint);
-//		
-//		for (int i = 0; i<stack.size(); i++) {
-//			for (List<String> combination : combinatrix) {
-//				
-//				float v1 = evaluateFloorValue(footprint, combination, i+1);
-//				float v2 = evaluateFloorValue(footprint, stack.get(i), i+1);
-//				
-//				if (v1 > v2) {
-//					stack.set(i, combination);
-//				}
-//			}
-//		}
-//	}
-//	
-////	private void buildStacks() {
-////
-////		for (String footprintType : sm.getFootprintTypes()) {
-////			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-////				buildStack(footprint);
-////			}
-////		}
-////		
-////		swapStacks();
-////	}
-//	
-////	private void swapStacks() {
-////		
-////		Map<String, Integer> count = new HashMap<>();
-////		Map<String, Integer> max = new HashMap<>();
-////		
-////		Map<Polygon3D, List<List<String>>> combinatrices = new HashMap<>();
-////		
-////		for (String footprintType : sm.getFootprintTypes()) {
-////			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-////
-////				List<List<String>> combinatrix = new ArrayList<>();
-////				for (String unitType : bm.getUnitTypes()) {
-////					combinatrix.add(Arrays.asList(unitType));
-////				}
-////				
-////				combinatrices.put(footprint, buildUnitCombinatrix(footprintType, footprint, combinatrix));
-////			}
-////		}
-////		
-////		for (String unitType : bm.getUnitTypes()) {
-////			max.put(unitType, bm.getUnit(unitType).count);
-////			count.put(unitType, evaluateTotalUnitCount(unitType));
-////			
-////			System.out.println(unitType + " " + count.get(unitType) + " / " + max.get(unitType));
-////		}
-////				
-////		while (!isStackMixValid()) {
-////					
-////			float min = Float.MAX_VALUE;
-////			
-////			Integer fromIndex = null;
-////			Polygon3D fromFootprint = null;
-////			
-////			List<String> toCombination = null;
-////			
-////			for (String unitType : bm.getUnitTypes()) {
-////				
-////				if (count.get(unitType) > max.get(unitType)) {
-////					
-////					for (String footprintType : sm.getFootprintTypes()) {
-////						for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-////							
-////							for (int i =0; i<sm.getStack(footprint).size(); i++) {
-////								
-////								List<String> floor = sm.getStack(footprint).get(i);
-////								
-////								if (floor.contains(unitType)) {
-////									
-////									float v1 = evaluateFloorValue(footprint, floor, i+1);
-////									
-////									List<List<String>> combinatrix = new ArrayList<>(combinatrices.get(footprint));
-////									
-////									loop:
-////									for (int j = combinatrix.size()-1; j>=0; j--) {				
-////										for (Map.Entry<String, Integer> mapEntry : count.entrySet()) {					
-////											if (mapEntry.getValue() >= bm.getUnit(mapEntry.getKey()).count) {
-////												if (combinatrix.get(j).contains(mapEntry.getKey())) {
-////													combinatrix.remove(j);
-////													continue loop;
-////												}
-////											}
-////										}
-////									}
-////									
-////									for (List<String> combination : combinatrices.get(footprint)) {
-////										
-////										if (!floor.equals(combination)) {
-////											
-////											float v2 = evaluateFloorValue(footprint, combination, i+1);
-////											
-////											if (v1 - v2 < min && v1 - v2 > 0) {
-////												
-////												fromIndex = i;
-////												fromFootprint = footprint;
-////												
-////												toCombination = combination;
-////											}
-////										}
-////									}
-////								}
-////							}
-////						}
-////					}
-////				}
-////			}
-////			
-////			if (fromIndex == null || fromFootprint == null) {
-////				break;
-////			}
-////			
-////			System.out.println(sm.getStack(fromFootprint).get(fromIndex) + " -> " + toCombination);
-////			
-////			
-////			for (String unitType : sm.getStack(fromFootprint).get(fromIndex)) {
-////				count.put(unitType, count.get(unitType) - 1);
-////			}
-////						
-////			for (String unitType : toCombination) {
-////				count.put(unitType, count.get(unitType) + 1);
-////			}
-////			
-////			sm.getStack(fromFootprint).set(fromIndex, toCombination);
-////		}
-////	}
-//	
-//	private void buildStacks() {
-//		
-//		Map<String, Integer> counter = new HashMap<>();
-//		Map<Polygon3D, List<List<String>>> combinatrices = new HashMap<>();
-//		
-//		for (String footprintType : sm.getFootprintTypes()) {
-//			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-//				for (List<String> floor : sm.getStack(footprint)) {
-//					floor.clear();
-//				}
-//				
-//				List<List<String>> combinatrix = new ArrayList<>();
-//				for (String unitType : bm.getUnitTypes()) {
-//					combinatrix.add(Arrays.asList(unitType));
-//				}
-//				
-//				combinatrices.put(footprint, buildUnitCombinatrix(footprintType, footprint, combinatrix));
-//			}
-//		}
-//		
-//		for (String unitType : bm.getUnitTypes()) {
-//			counter.put(unitType, 0);
-//		}
-//		
-//		System.out.println(counter);
-//				
-//		for (String footprintType : sm.getFootprintTypes()) {
-//			for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-//				
-//				List<List<String>> combinatrix = new ArrayList<>();		
-//				Stack<List<String>> stack = sm.getStack(footprint);
-//				
-//				for (List<String> c: combinatrices.get(footprint)) {
-//					combinatrix.add(new ArrayList<>(c));
-//				}
-//												
-//				for (int j = 0; j<stack.size(); j++) {
-//					
-//					loop:
-//					for (int i = combinatrix.size()-1; i>=0; i--) {				
-//						for (Map.Entry<String, Integer> mapEntry : counter.entrySet()) {					
-//							if (mapEntry.getValue() >= bm.getUnit(mapEntry.getKey()).count) {
-//								if (combinatrix.get(i).contains(mapEntry.getKey())) {
-//									combinatrix.remove(i);
-//									continue loop;
-//								}
-//							}
-//						}
-//					}
-//				
-//					for ( List<String> combination : combinatrix) {
-//					
-//						float v1 = evaluateFloorValue(footprint, combination, j+1);
-//						float v2 = evaluateFloorValue(footprint, stack.get(j), j+1);
-//						
-//						if (v1 > v2) {
-//							
-//							for (String unitType : stack.get(j)) {
-//								counter.put(unitType, counter.get(unitType) - 1);
-//							}
-//							
-//							stack.set(j, combination);
-//							
-//							for (String unitType : stack.get(j)) {
-//								counter.put(unitType, counter.get(unitType) + 1);
-//							}
-//						}
-//					}
-//				}	
-//			}
-//		}
-//	}
-//	
-//	
-////	private void initialize(StackManager sm, BlockManager bm) {
-////		
-////		this.sm = sm;
-////		this.bm = bm;
-////	
-////		Polygon3D init = null;
-////		List<List<String>> combinatrix = new ArrayList<>();
-////		Map<String, Integer> counter = new HashMap<>();
-////		
-////		
-////		for (String footprintType : sm.getFootprintTypes()) {
-////			for (Polygon3D footprint : sm.getFootprints(footprintType)) {		
-////				sm.getStack(footprint).clear();
-////				init = footprint;
-////			}
-////		}
-////				
-////		for (String unitType : bm.getUnitTypes()) {
-////			combinatrix.add(Arrays.asList(unitType));
-////			counter.put(unitType, 0);
-////		}
-////		
-////		combinatrix = buildUnitCombinatrix(sm.getFootprintType(init), init, combinatrix);
-////		
-////		while (combinatrix.size() > 0) {
-////				
-////			loop:
-////			for (int i = combinatrix.size()-1; i>=0; i--) {				
-////				for (Map.Entry<String, Integer> mapEntry : counter.entrySet()) {					
-////					if (mapEntry.getValue() >= bm.getUnit(mapEntry.getKey()).count) {
-////						if (combinatrix.get(i).contains(mapEntry.getKey())) {
-////							combinatrix.remove(i);
-////							continue loop;
-////						}
-////					}
-////				}
-////			}
-////						
-////			sm.pushFloor(init, new ArrayList<>());
-////			
-////			int i = sm.getStack(init).size();
-////			
-////			for ( List<String> combination : combinatrix) {
-////				
-////				float v1 = evaluateFloorValue(init, combination, i);
-////				float v2 = evaluateFloorValue(init, sm.getStack(init).get(i-1), i);
-////				
-////				if (v1 > v2) {
-////					
-////					for (String unitType : sm.getStack(init).get(i-1)) {
-////						counter.put(unitType, counter.get(unitType) - 1);
-////					}
-////					
-////					sm.getStack(init).set(i-1, combination);
-////					
-////					for (String unitType : sm.getStack(init).get(i-1)) {
-////						counter.put(unitType, counter.get(unitType) + 1);
-////					}
-////
-////				}
-////			}
-////		}
-////		
-////		print();
-////				
-////		for (int i=0; i<sm.getStack(init).size(); i++) {
-////			for (int j = i+1; j<sm.getStack(init).size(); j++) {
-////				
-////				float v1 = evaluateFloorValue(init, sm.getStack(init).get(i), i);
-////				float v2 = evaluateFloorValue(init, sm.getStack(init).get(j), i);
-////				
-////				if (v1 > v2) {
-////					sm.swapFloor(init, i, init, j);
-////				}
-////			}
-////		}
-////		
-////		print();
-////	}
-////	
-////	public void run(StackManager sm, BlockManager bm) {
-////		
-////		initialize(sm, bm);		
-////	}
-//	
-//	private void initialize(StackManager sm, BlockManager bm) {
-//		
-//		this.sm = sm;
-//		this.bm = bm;
-//		
-//		for (String type : sm.getFootprintTypes()) {
-//			for (Polygon3D footprint : sm.getFootprints(type)) {
-//				sm.getStack(footprint).clear();
-//			}
-//		}
-//		
-//		float area = 0f;
-//		
-//		boolean isNotMaxArea = true;
-//		
-//		while (isNotMaxArea) {
-//			
-//			isNotMaxArea = false;
-//			
-//			for (String footprintType : sm.getFootprintTypes()) {
-//				for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-//										
-//					if (area + footprint.area() < maxArea) {
-//						if (floorToCeilingHeight * (sm.getStack(footprint).size() + 1) < maxHeight) {
-//							sm.pushFloor(footprint, new ArrayList<>());
-//							
-//							area += footprint.area();
-//							isNotMaxArea = true;
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//	
-//			
-//	public void run(StackManager sm, BlockManager bm) {
-//		
-//		initialize(sm, bm);
-//		
-//		boolean isChanged = true;
-//		
-//		outerLoop:
-//		while (isChanged) {
-//						
-//			float currValue = evaluateTotalValue();
-//			
-//			isChanged = false;
-//			
-//			try {
-//				Thread.sleep(100);
-//			} catch (InterruptedException e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
-//			
-//			for (String footprintType : sm.getFootprintTypes()) {
-//				
-//				for (Polygon3D footprint : sm.getFootprints(footprintType)) {
-//					
-//					if (!sm.getStack(footprint).isEmpty()) {
-//						
-//						for (String otherType : sm.getFootprintTypes()) {
-//														
-//							for (Polygon3D otherFootprint : sm.getFootprints(otherType)) {
-//																
-//								if (!footprint.equals(otherFootprint)  && isPushFloorValid(footprint, otherFootprint)) {
-//																		
-//									int count = 0;
-//									
-//									while(evaluateTotalArea() <= maxArea) {
-//										sm.pushFloor(otherFootprint, new ArrayList<>());
-//										count++;
-//										
-//										try {
-//											Thread.sleep(20);
-//										} catch (InterruptedException e) {
-//											// TODO Auto-generated catch block
-//											e.printStackTrace();
-//										}
-//									}
-//									
-//									count--;
-//									sm.popFloor(otherFootprint);
-//									
-//									buildStacks();
-//									
-//									float testValue = evaluateTotalValue();
-//									
-//									if (testValue > currValue) {
-//										
-//										currValue = testValue;
-//										isChanged = true;
-//										continue outerLoop;
-//										
-//									} else {
-//										
-//										sm.pushFloor(footprint, new ArrayList<>());
-//										
-//										while (count>0) {
-//											sm.popFloor(otherFootprint);
-//											count--;
-//											
-//											try {
-//												Thread.sleep(20);
-//											} catch (InterruptedException e) {
-//												// TODO Auto-generated catch block
-//												e.printStackTrace();
-//											}
-//										}
-//									}
-//									
-//									buildStacks();
-//								}
-//							}	
-//						}
-//					}
-//				}								
-//			}
-//		}
-//		
-//		print();
-//	}
+						
+		outerLoop:
+		while (true) { 
+			
+			float currValue = evaluateTotalValue();
+			
+			SortedMap<Float, Map<Polygon3D, Stack<List<String>>>> elite = new TreeMap<>();
+						
+			for (String footprintType : sm.getFootprintTypes()) {
+			
+				for (Polygon3D footprint : sm.getFootprints(footprintType)) {
+					
+					if (!sm.getStack(footprint).isEmpty()) {
+																						
+						for (String otherType : sm.getFootprintTypes()) {
+														
+							for (Polygon3D otherFootprint : sm.getFootprints(otherType)) {
+																
+								if (!footprint.equals(otherFootprint)) {
+																															
+									if (isPushFloorValid(footprint, otherFootprint)) {
+										
+										int count = sm.getStack(footprint).size();
+										
+										for (int i=0; i<count; i++) {
+																																												
+											saveStacks();
+																												
+											List<String> floor = sm.getStack(footprint).get(i);
+																							
+											sm.getStack(footprint).remove(i);
+											sm.pushFloor(otherFootprint, floor);
+											
+											applyStacks();
+											
+											float testValue = evaluateTotalValue();
+																							
+											if (testValue > currValue) {					
+												elite.put(testValue, saveState());
+												
+											}
+																								
+											restoreStacks();
+										}
+									}
+																																					
+									if (isSwapFloorValid(footprint, otherFootprint)) {
+										
+										swapLoop:
+										for (int i=0; i<sm.getStack(footprint).size()-1; i++) {
+											for (int j=0; j<sm.getStack(otherFootprint).size()-1; j++) {
+																										
+												saveStacks();
+																																		
+												if (sm.getStack(footprint).size()-1 < i) {		
+													break swapLoop;
+												
+												} else if(sm.getStack(otherFootprint).size()-1 < j) {										
+													continue swapLoop;
+												
+												}
+												
+												Set<String> s1 = new HashSet<>(sm.getStack(footprint).get(i));
+												Set<String> s2 = new HashSet<>(sm.getStack(otherFootprint).get(j));
+												
+												if (s1.equals(s2))  {													
+													continue swapLoop;
+												}
+												
+//												try {
+//													Thread.sleep(50);
+//												} catch (InterruptedException e) {
+//													e.printStackTrace();
+//												}
+													
+												sm.swapFloor(footprint, i, otherFootprint, j);
+												
+												applyStacks();
+												
+												float testValue = evaluateTotalValue();
+												
+												if (testValue > currValue) {									
+													elite.put(testValue, saveState());
+													
+												}
+													
+												restoreStacks();
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			List<Float> values = new ArrayList<>(elite.keySet());
+			
+			if (values.isEmpty()) {
+				break outerLoop;
+			}
+			
+			System.out.println("increased value : " + values.get(values.size()-1));
+			
+			restoreState(elite.get(values.get(values.size()-1)));
+		}
+		
+		print();
+	}		
 }
