@@ -49,13 +49,6 @@ public class StackManager {
 		stacks.get(f2).set(i2, u1);
 		stacks.get(f1).set(i1, u2);
 	}
-	
-//	public void insertFloor(Polygon3D fromFootprint, Integer fromIndex, Polygon3D toFootprint, Integer toIndex) {
-//		
-//		List<String> floor = stacks.get(fromFootprint).get(fromIndex);
-//		stacks.get(fromFootprint).remove(fromIndex);
-//		stacks.get(toFootprint).insertElementAt(floor, toIndex);
-//	}
 			
 	public List<Polygon3D> getFootprints (String footprintType) {
 		return this.footprints.get(footprintType);

@@ -11,11 +11,13 @@ import java.util.HashSet;
 
 import javax.media.opengl.GL2;
 
+import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.jogamp.graph.geom.opengl.SVertex;import cdr.colour.Colour;
 import cdr.colour.HEXColour;
 import cdr.colour.HSVColour;
 import cdr.fileIO.dxf2.DXFDocument2;
 import cdr.geometry.primitives.ArrayVector3D;
+import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Rectangle2D;
 import cdr.geometry.renderer.GeometryRenderer;
@@ -25,8 +27,11 @@ import cdr.joglFramework.event.KeyEvent;
 import cdr.joglFramework.event.listener.impl.SimpleKeyListener;
 import cdr.joglFramework.frame.GLFramework;
 import cdr.joglFramework.renderer.OpaqueRendererWithGUI;
+import cdr.mesh.datastructure.Face;
+import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.renderer.MeshRenderer3DFlatShaded;
 import cdr.mesh.renderer.MeshRenderer3DOutline;
+import cdr.spacepartition.boundingObjects.BoundingBox3D;
 import fileio.CsvReader;
 import fileio.FileDialogs;
 import geometry.PolygonApproximationRectangular;
@@ -35,7 +40,6 @@ import javafx.application.Platform;
 public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 	GeometryRenderer gr = new GeometryRenderer();
-	StackViewer sv;
 	StackManager sm;
 	StackEvaluator se;
 	BlockManager bm;
@@ -53,29 +57,40 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	@Override
 	protected void renderFill(GL2 gl) {
-		
-		MeshRenderer3DFlatShaded mr = new MeshRenderer3DFlatShaded();
-						
-		if (sv != null) {
+								
+		if (sm != null && bm != null) {
 
 			for (String type : sm.getFootprintTypes()) {
 				for (Polygon3D footprint : sm.getFootprints(type)) {
 					
-					for (Map.Entry<String, List<Polygon3D>> unitFaces : sv.getViewableStackUnits(
-							footprint, 
-							sm.getStack(footprint), 
+					for (Map.Entry<String, List<Mesh3D>> units : StackViewer.getViewableStackUnits(
+							sm,
+							bm,
+							footprint,  
 							se.floorToCeilingHeight).entrySet()) {
-						
 
-						HEXColour colour = new HEXColour(unitFaces.getKey());
-						gl.glColor3f(colour.red(), colour.green(), colour.blue());
+						String color = bm.getUnit(units.getKey()).color;
 						
-						gr.renderPolygons3DFill(gl, unitFaces.getValue());
-						
-						gl.glLineWidth(0.1f);
-						gl.glColor3f(0f, 0f, 0f);
-						
-						gr.renderPolygons3DLines(gl, unitFaces.getValue());
+						for (Mesh3D unit : units.getValue()) {
+							
+							List<Polygon3D> unitFaces = new ArrayList<>();
+							
+							for(Face face : unit.iterableFaces()) {
+								
+								unitFaces.add(unit.getPolygon(face)); 					
+							}
+
+							HEXColour colour = new HEXColour(color);
+							gl.glColor3f(colour.red(), colour.green(), colour.blue());
+							
+							gr.renderPolygons3DFill(gl, unitFaces);
+							
+							gl.glLineWidth(0.1f);
+							gl.glColor3f(0f, 0f, 0f);
+							
+							gr.renderPolygons3DLines(gl, unitFaces);
+						}
+
 					}
 				}
 			}
@@ -90,18 +105,20 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		gl.glLineWidth(1.0f);
 		gl.glColor3f(0f, 0f, 0f);
 		
-		if (sv != null) {
-						
+		if (sm != null) {
 			gr.renderPolygons3DLines(gl, sm.getBoundaries());
-			
+		}
+		
+		if (sm != null && bm != null) {
+							
 			for (String type : sm.getFootprintTypes()) {
 				for (Polygon3D footprint : sm.getFootprints(type)) {
 									
-//					gr.renderPolygons3DLines(gl, 
-//							sv.getViewableStack(
-//									footprint, 
-//									sm.getStack(footprint), 
-//									se.floorToCeilingHeight));
+					gr.renderPolygons3DLines(gl, 
+							StackViewer.getViewableStack(
+									sm,
+									footprint, 
+									se.floorToCeilingHeight));
 										
 //					gr.renderPolygons3DLines(gl, 
 //							sv.getViewableStackUnits(
@@ -136,7 +153,6 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 							sm = new StackManager();
 							se = new StackEvaluator();
-							sv = new StackViewer();
 														
 							importDXF();
 						}
@@ -193,14 +209,25 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							String[] layerString = layerName.split("\\$");
 							String footprintType = layerString[1];
 							
-							List<Polygon3D> polygons = new ArrayList<>();
-												
+							List<Polygon3D> polygons = new ArrayList<>();		
 							dxf.getPolygons3D(layerName, polygons);
-							sm.addFootPrint(footprintType, polygons);
+							
+							List<Polygon3D> footprints = new ArrayList<>();
+							
+							for (Polygon3D pgon : polygons) {
+
+								float wh = (float) Math.sqrt(pgon.area());
+								Point3D a = pgon.getAnchor();
+								
+								footprints.add(new Rectangle2D(a.x(), a.y(), wh, wh)
+										.getPolygon2D()
+										.getPolygon3D(a.z()));
+								
+							}
+
+							sm.addFootPrint(footprintType, footprints);
 						}
 					}
-					
-					sv.setStackManager(sm);
 				}	
 			}
 		});
@@ -231,8 +258,6 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 						bm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
 					}
-					
-					sv.setBlockManager(bm);
 				}
 			}
 		});

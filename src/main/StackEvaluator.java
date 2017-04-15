@@ -1,6 +1,7 @@
 package main;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -11,9 +12,8 @@ import java.util.Stack;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import com.sun.org.apache.bcel.internal.generic.IF_ACMPEQ;
-
 import cdr.geometry.primitives.Polygon3D;
+import de.erichseifert.gral.data.DummyData;
 
 public class StackEvaluator {
 	
@@ -30,6 +30,8 @@ public class StackEvaluator {
 	
 	private StackManager sm;
 	private BlockManager bm;
+	
+	private long sleep = 0l;
 	
 	private Map<Polygon3D, Stack<List<String>>> restore;
 	
@@ -216,17 +218,35 @@ public class StackEvaluator {
 						
 			List<String> chunk = units.subList(f,t);
 			
-			fillStack(footprints.get(i), chunk);
+			applyStack(footprints.get(i), chunk);
 		}
 	}
-	
-	private void fillStack(Polygon3D footprint, List<String> units) {
+			
+	private void applyStack(Polygon3D footprint, List<String> units) {
 		
 		Stack<List<String>> stack = sm.getStack(footprint);
 		Stack<String> fill = new Stack<>();
 		for (String unit : units) {
 			fill.push(unit);
 		}
+		
+		fill.sort(new Comparator<String>() {
+
+			@Override
+			public int compare(String o1, String o2) {
+				
+				float v1 = bm.getUnit(o1).value;
+				float v2 = bm.getUnit(o2).value;
+				
+				if (v1 < v2) {
+					return 1;
+				} else if (v1 > v2) {
+					return -1;
+				} else {
+					return 0;
+				}
+			}
+		});
 		
 		stack.clear();
 		stack.push(new ArrayList<>());
@@ -240,15 +260,57 @@ public class StackEvaluator {
 				stack.peek().add(unit);
 			}
 		}
-		
-		for (int i=0; i<sm.getStack(footprint).size(); i++) {
-			for (int j = i+1; j<sm.getStack(footprint).size(); j++) {
+						
+		for (int i=0; i<stack.size(); i++) {
+			for (int j = i; j<stack.size(); j++) {
 				
-				float v1 = evaluateFloorValue(footprint, sm.getStack(footprint).get(i), i);
-				float v2 = evaluateFloorValue(footprint, sm.getStack(footprint).get(j), i);
-				
-				if (v1 > v2) {
-					sm.swapFloor(footprint, i, footprint, j);
+				List<String> fromUnitTypes = stack.get(i);
+				List<String> toUnitTypes = stack.get(j);
+								
+				float currValue = evaluateFloorValue(footprint, fromUnitTypes, i+1) +
+						 evaluateFloorValue(footprint, toUnitTypes, j+1);
+								
+				if (!fromUnitTypes.equals(toUnitTypes)) {
+					
+					for (int ii=0; ii<fromUnitTypes.size(); ii++) {
+					
+						for (int jj=0; jj<toUnitTypes.size(); jj++) {
+							
+							String fromUnitType = fromUnitTypes.get(ii);
+							String toUnitType = toUnitTypes.get(jj);
+							
+							if (!fromUnitType.equals(toUnitType)) {
+								
+								List<String> testFrom = new ArrayList<>(fromUnitTypes);
+								List<String> testTo = new ArrayList<>(toUnitTypes);
+								
+								testFrom.remove(ii);
+								testTo.remove(jj);
+								
+								if (fitUnit(footprint, testFrom, toUnitType) &&
+									fitUnit(footprint, testTo, fromUnitType)) {
+									
+									float testValue = evaluateFloorValue(footprint, testFrom, i+1) +
+											 evaluateFloorValue(footprint, testTo, j+1);
+																		
+									if (testValue > currValue) {
+										
+										stack.set(i, testFrom);
+										stack.set(j, testTo);
+																				
+										try {
+											Thread.sleep(sleep);
+										} catch (InterruptedException e) {
+											e.printStackTrace();
+										}
+										
+										currValue = testValue;
+										
+									}
+								}
+							}
+						}
+					}			
 				}
 			}
 		}
@@ -264,7 +326,7 @@ public class StackEvaluator {
                         .flatMap(l -> l.stream())
                         .collect(Collectors.toList());
 				
-				fillStack(footprint, units);
+				applyStack(footprint, units);
 			}
 		}
 	}
@@ -321,10 +383,10 @@ public class StackEvaluator {
 	public void evaluate(StackManager sm, BlockManager bm) {
 		
 		initialize(sm, bm);
-						
+				
 		outerLoop:
 		while (true) { 
-			
+						
 			float currValue = evaluateTotalValue();
 			
 			SortedMap<Float, Map<Polygon3D, Stack<List<String>>>> elite = new TreeMap<>();
@@ -340,17 +402,45 @@ public class StackEvaluator {
 							for (Polygon3D otherFootprint : sm.getFootprints(otherType)) {
 																
 								if (!footprint.equals(otherFootprint)) {
-																															
+									
+									int count = sm.getStack(footprint).size();
+									
+//									//sliding dump loop - needs to dump all permutations of the floors						
+//									saveStacks();
+//									
+//									for (int i=count-1; i>=0; i--) {
+//																				
+//										for (int j=i-1; j>=0; j--) {
+//										
+//											List<List<String>> dump = new ArrayList<>();
+//											
+//											for (int k=j; k>=i; k--) {
+//					
+//												dump.add(sm.getStack(footprint).remove(i));
+//												
+//											}
+//											
+//										}
+//									}
+//									
+//									restoreStacks();
+									
+									
+									// single push loop
 									if (isPushFloorValid(footprint, otherFootprint)) {
-										
-										int count = sm.getStack(footprint).size();
-										
+																				
 										for (int i=0; i<count; i++) {
 																																												
 											saveStacks();
 																												
 											List<String> floor = sm.getStack(footprint).get(i);
-																							
+														
+											try {
+												Thread.sleep(sleep);
+											} catch (InterruptedException e) {
+												e.printStackTrace();
+											}
+											
 											sm.getStack(footprint).remove(i);
 											sm.pushFloor(otherFootprint, floor);
 											
@@ -362,16 +452,56 @@ public class StackEvaluator {
 												elite.put(testValue, saveState());
 												
 											}
+											
+											try {
+												Thread.sleep(sleep);
+											} catch (InterruptedException e) {
+												e.printStackTrace();
+											}
+											
 																								
 											restoreStacks();
 										}
 									}
-																																					
+									
+									
+									//dump loop									
+									saveStacks();
+									
+									for (int i=count-1; i>=0; i--) {
+																				
+										if (isPushFloorValid(footprint, otherFootprint)) {
+											
+											List<String> floor = sm.getStack(footprint).get(i);
+											
+											try {
+												Thread.sleep(sleep);
+											} catch (InterruptedException e) {
+												e.printStackTrace();
+											}
+											
+											sm.getStack(footprint).remove(i);
+											sm.pushFloor(otherFootprint, floor);
+											
+											applyStacks();
+											
+											float testValue = evaluateTotalValue();
+																							
+											if (testValue > currValue) {					
+												elite.put(testValue, saveState());	
+											}
+										}
+									}
+									
+									restoreStacks();	
+									
+									
+									// swap loop
 									if (isSwapFloorValid(footprint, otherFootprint)) {
 										
 										swapLoop:
-										for (int i=0; i<sm.getStack(footprint).size()-1; i++) {
-											for (int j=0; j<sm.getStack(otherFootprint).size()-1; j++) {
+										for (int i=0; i<sm.getStack(footprint).size(); i++) {
+											for (int j=0; j<sm.getStack(otherFootprint).size(); j++) {
 																										
 												saveStacks();
 																																		
@@ -390,11 +520,11 @@ public class StackEvaluator {
 													continue swapLoop;
 												}
 												
-//												try {
-//													Thread.sleep(50);
-//												} catch (InterruptedException e) {
-//													e.printStackTrace();
-//												}
+												try {
+													Thread.sleep(sleep);
+												} catch (InterruptedException e) {
+													e.printStackTrace();
+												}
 													
 												sm.swapFloor(footprint, i, otherFootprint, j);
 												
@@ -406,6 +536,13 @@ public class StackEvaluator {
 													elite.put(testValue, saveState());
 													
 												}
+												
+												try {
+													Thread.sleep(sleep);
+												} catch (InterruptedException e) {
+													e.printStackTrace();
+												}
+												
 													
 												restoreStacks();
 											}
@@ -420,12 +557,12 @@ public class StackEvaluator {
 			
 			List<Float> values = new ArrayList<>(elite.keySet());
 			
-			if (values.isEmpty()) {
+			if (values.isEmpty()) {				
 				break outerLoop;
 			}
 			
-			System.out.println("increased value : " + values.get(values.size()-1));
-			
+			System.out.println("increased value : " + currValue + " -> " + values.get(values.size()-1));
+						
 			restoreState(elite.get(values.get(values.size()-1)));
 		}
 		

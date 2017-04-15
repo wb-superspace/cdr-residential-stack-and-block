@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Polygon3D;
@@ -26,7 +27,7 @@ public class StackViewer {
 		this.sm = sm;
 	}
 
-	public List<Polygon3D> getViewableStack(Polygon3D footprint, Stack<List<String>> stack, float floorToCeilingHeight) {
+	public static List<Polygon3D> getViewableStack(StackManager sm, Polygon3D footprint, float floorToCeilingHeight) {
 				
 		List<Polygon3D> viewableStack = new ArrayList<>();
 		
@@ -34,51 +35,44 @@ public class StackViewer {
 			return viewableStack;
 		}
 		
-		for (int i=0; i<stack.size(); i++) {		
+		for (int i=0; i<sm.getStack(footprint).size(); i++) {		
 			viewableStack.add(new Polygon3D(footprint.iterablePoints()));
 			viewableStack.get(i).translate(new ArrayVector3D(0, 0, i*floorToCeilingHeight));
 		}
 		
 		return viewableStack;
 	}
-	
-	public Map<String, List<Polygon3D>> getViewableStackUnits(Polygon3D footprint, Stack<List<String>> stack, float floorToCeilingHeight) {
+		
+	public static Map<String, List<Mesh3D>> getViewableStackUnits(StackManager sm, BlockManager bm, Polygon3D footprint, float floorToCeilingHeight) {
+		
+		Map<String, List<Mesh3D>> viewableStackUnits = new HashMap<>();
+		
+		float e1 = footprint.getLineSegment(0).getLength();
+		float e2 =  footprint.getLineSegment(1).getLength();
+		
+		float minEdge = Math.min(e1,e2);
+		float maxEdge = Math.max(e1, e2);
 				
-		Map<String, List<Polygon3D>> viewableStackUnits = new HashMap<>();
-		
-		if (bm == null) {
-			return viewableStackUnits;
-		}
-		
 		for (String unitType : bm.getUnitTypes()) {
-			viewableStackUnits.put(bm.getUnit(unitType).color, new ArrayList<>());
+			viewableStackUnits.put(unitType, new ArrayList<>());
 		}
 		
-		for (int i =0; i<stack.size(); i++) {
+		CopyOnWriteArrayList<List<String>> list = new CopyOnWriteArrayList<>(sm.getStack(footprint));
+		
+		for (int i =0; i<list.size(); i++) {
 			
 			float offset = 0f;
 			
-			for (int j=0; j<stack.get(i).size(); j++) {
-				
-				float width = bm.getUnit(stack.get(i).get(j)).area;
-				float height = bm.getUnit(stack.get(i).get(j)).area;
-				
-				width = (float) Math.sqrt(width);
-				height = (float) Math.sqrt(height);
-				
-				String color = bm.getUnit(stack.get(i).get(j)).color;
-				
+			for (int j=0; j<list.get(i).size(); j++) {
+							
+				float height = bm.getUnit(list.get(i).get(j)).area / minEdge;
+				float width = bm.getUnit(list.get(i).get(j)).area / height;
+							
 				Rectangle2D unit = new Rectangle2D(footprint.getAnchor().x(), footprint.getAnchor().y() + offset, width, height);
-			
 				Polygon3D boundary = unit.getPolygon2D().getPolygon3D(i*floorToCeilingHeight);
 				
-				Mesh3D mesh = MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(boundary, floorToCeilingHeight);
+				viewableStackUnits.get(list.get(i).get(j)).add(MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(boundary, floorToCeilingHeight));
 				
-				for(Face face : mesh.iterableFaces()) {
-				
-					viewableStackUnits.get(color).add(mesh.getPolygon(face)); 					
-				}
-
 				offset+= height;
 			}
 		}

@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import cdr.mesh.datastructure.Mesh3D;
+
 public class BlockManager {
 	
 	private Map<String, Unit> blockMatrix = new HashMap<>();
@@ -19,7 +21,7 @@ public class BlockManager {
 	public Unit getUnit(String type) {
 		return this.blockMatrix.get(type);
 	}
-	
+		
 	public class Unit {
 		
 		public String type;
