@@ -14,5 +14,11 @@
 	<left>
 	</left>
 	<right>
+	<AnchorPane>
+		<children>
+			<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="false" text="Unit Mix" >
+			</TitledPane>
+		</children>
+	</AnchorPane>
 	</right>
 </BorderPane>

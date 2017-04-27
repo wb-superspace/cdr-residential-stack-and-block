@@ -6,13 +6,18 @@ import java.util.Set;
 import java.awt.datatransfer.FlavorTable;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 
 import javax.media.opengl.GL2;
 
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
-import com.jogamp.graph.geom.opengl.SVertex;import cdr.colour.Colour;
+import com.jogamp.graph.geom.opengl.SVertex;
+import com.jogamp.opengl.util.gl2.GLUT;
+import com.sun.swing.internal.plaf.metal.resources.metal;
+
+import cdr.colour.Colour;
 import cdr.colour.HEXColour;
 import cdr.colour.HSVColour;
 import cdr.fileIO.dxf2.DXFDocument2;
@@ -20,6 +25,7 @@ import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Rectangle2D;
+import cdr.geometry.primitives.Text3D;
 import cdr.geometry.renderer.GeometryRenderer;
 import cdr.joglFramework.camera.GLCamera;
 import cdr.joglFramework.camera.GLCameraAxonometric;
@@ -42,7 +48,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	GeometryRenderer gr = new GeometryRenderer();
 	StackManager sm;
 	StackEvaluator se;
-	BlockManager bm;
+	
+	GLUT glut = new GLUT();
 		
 	@Override
 	protected GLCamera createCamera(GLFramework framework) {
@@ -50,49 +57,46 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	}
 
 	@Override
-	protected void renderGUI(GL2 arg0, int arg1, int arg2) {
-		// TODO Auto-generated method stub
+	protected void renderGUI(GL2 gl, int width, int height) {
 		
 	}
 	
 	@Override
 	protected void renderFill(GL2 gl) {
 								
-		if (sm != null && bm != null) {
+		if (sm != null) {
 
-			for (String type : sm.getFootprintTypes()) {
-				for (Polygon3D footprint : sm.getFootprints(type)) {
-					
-					for (Map.Entry<String, List<Mesh3D>> units : StackViewer.getViewableStackUnits(
-							sm,
-							bm,
-							footprint,  
-							se.floorToCeilingHeight).entrySet()) {
-
-						String color = bm.getUnit(units.getKey()).color;
-						
-						for (Mesh3D unit : units.getValue()) {
-							
-							List<Polygon3D> unitFaces = new ArrayList<>();
-							
-							for(Face face : unit.iterableFaces()) {
+			for (Point3D footprint : sm.getFootprints()) {
 								
-								unitFaces.add(unit.getPolygon(face)); 					
-							}
+				for (Map.Entry<String, List<Mesh3D>> units : StackViewer.getViewableStackMeshes(
+						sm,
+						footprint,  
+						se.floorToCeilingHeight).entrySet()) {
 
-							HEXColour colour = new HEXColour(color);
-							gl.glColor3f(colour.red(), colour.green(), colour.blue());
+					String color = sm.unitColors.get(units.getKey());
+					
+					for (Mesh3D unit : units.getValue()) {
+						
+						List<Polygon3D> unitFaces = new ArrayList<>();
+						
+						for(Face face : unit.iterableFaces()) {
 							
-							gr.renderPolygons3DFill(gl, unitFaces);
-							
-							gl.glLineWidth(0.1f);
-							gl.glColor3f(0f, 0f, 0f);
-							
-							gr.renderPolygons3DLines(gl, unitFaces);
+							unitFaces.add(unit.getPolygon(face)); 					
 						}
 
+						HEXColour colour = new HEXColour(color);
+						gl.glColor3f(colour.red(), colour.green(), colour.blue());
+						
+						gr.renderPolygons3DFill(gl, unitFaces);
+						
+						gl.glLineWidth(0.1f);
+						gl.glColor3f(0f, 0f, 0f);
+						
+						gr.renderPolygons3DLines(gl, unitFaces);
 					}
+
 				}
+				
 			}
 		}
 	}
@@ -109,28 +113,26 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 			gr.renderPolygons3DLines(gl, sm.getBoundaries());
 		}
 		
-		if (sm != null && bm != null) {
+		if (sm != null) {
 							
-			for (String type : sm.getFootprintTypes()) {
-				for (Polygon3D footprint : sm.getFootprints(type)) {
-									
-					gr.renderPolygons3DLines(gl, 
-							StackViewer.getViewableStack(
-									sm,
-									footprint, 
-									se.floorToCeilingHeight));
-										
-//					gr.renderPolygons3DLines(gl, 
-//							sv.getViewableStackUnits(
-//									footprint, 
-//									sm.getStack(footprint), 
-//									se.floorToCeilingHeight));
+			for (Point3D footprint : sm.getFootprints()) {
+								
+				gr.renderPolygons3DLines(gl, 
+						StackViewer.getViewableStackPolygons(
+								sm,
+								footprint, 
+								se.floorToCeilingHeight));
+								
+				for (Map.Entry<Point3D, Float> valueEntry : StackViewer.getViewableStackValues(sm, se, footprint).entrySet()) {
+										 
+					gl.glPushMatrix();
+					gl.glTranslatef(valueEntry.getKey().x()+10,valueEntry.getKey().y()+10, valueEntry.getKey().z());
+					gl.glScalef(0.03f,0.03f,0.03f);
 					
-//					mr.renderEdges(gl, sv.getViewableStackUnits(
-//							footprint, 
-//							sm.getStack(footprint), 
-//							se.floorToCeilingHeight));
-			
+					gl.glColor3f(0,0,0); gl.glLineWidth(0.8f);
+					
+					glut.glutStrokeString(0, valueEntry.getValue().toString());		
+					gl.glPopMatrix();
 				}
 			}
 		}
@@ -165,9 +167,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						
 						@Override
 						public void run() {
-							
-							bm = new BlockManager();
-							
+														
 							importCSV();
 						}
 					});
@@ -180,7 +180,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						@Override
 						public void run() {
 							
-							se.evaluate(sm, bm);
+							se.evaluate(sm);
 						}
 					});
 				}
@@ -209,23 +209,41 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							String[] layerString = layerName.split("\\$");
 							String footprintType = layerString[1];
 							
-							List<Polygon3D> polygons = new ArrayList<>();		
-							dxf.getPolygons3D(layerName, polygons);
+							List<Point3D> locations = new ArrayList<>();
 							
-							List<Polygon3D> footprints = new ArrayList<>();
+							dxf.getPoints3D(layerName, locations);							
+							sm.addFootprint(footprintType, locations);
+						}
+					}
+					
+					for (String layerName : dxf.getLayerNames()) {
+												
+						if (layerName.contains("FLOORPLATE$")) {
 							
-							for (Polygon3D pgon : polygons) {
-
-								float wh = (float) Math.sqrt(pgon.area());
-								Point3D a = pgon.getAnchor();
-								
-								footprints.add(new Rectangle2D(a.x(), a.y(), wh, wh)
-										.getPolygon2D()
-										.getPolygon3D(a.z()));
-								
+							String[] layerString = layerName.split("\\$");
+							String footprintType = layerString[1];
+							String floorplateType = layerString[2];
+							
+							List<Point3D> floorplate = new ArrayList<>();
+							List<Polygon3D> units = new ArrayList<>();
+							List<Text3D> unitTypes = new ArrayList<>();
+							
+							dxf.getPolygons3D(layerName, units);
+							dxf.getPoints3D(layerName, floorplate);
+							dxf.getText3D(layerName, unitTypes);
+							
+							if (floorplate.size() != 1) {
+								System.out.println("invalid anchor - skipping");
+								continue;
 							}
-
-							sm.addFootPrint(footprintType, footprints);
+							
+							for (Polygon3D unit : units) {							
+								if (unit.getPlane3D().c() < 0) {
+									unit.reverseWinding();
+								}
+							}
+														
+							sm.addFloorplate(footprintType, floorplateType, floorplate.get(0), unitTypes, units);
 						}
 					}
 				}	
@@ -245,19 +263,22 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				if (file != null) {
 					
 					List<String[]> lines = CsvReader.getCSVLines(file);
-					String[] keys = lines.get(0);
 					lines.remove(0);
 					
 					for(String [] line : lines) {
 						
-						String unitType = line[0];
-						Integer unitCount = Integer.parseInt(line[1]);
-						Float unitArea = Float.parseFloat(line[2]);
-						Float unitValue = Float.parseFloat(line[3]);
-						String unitColor = line[4];
+						String unitType = line[0].trim();
+						Integer unitCount = Integer.parseInt(line[1].trim());
+						Float unitArea = Float.parseFloat(line[2].trim());
+						Float unitValue = Float.parseFloat(line[3].trim());
+						String unitColor = line[4].trim();
 
-						bm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
+						sm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
 					}
+					
+					System.out.println(sm.unitAreas);
+					System.out.println(sm.unitCounts);
+					System.out.println(sm.unitValues);
 				}
 			}
 		});

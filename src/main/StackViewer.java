@@ -7,27 +7,19 @@ import java.util.Map;
 import java.util.Stack;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import cdr.geometry.primitives.ArrayPoint3D;
 import cdr.geometry.primitives.ArrayVector3D;
+import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Rectangle2D;
+import cdr.geometry.primitives.Vector3D;
 import cdr.mesh.datastructure.Face;
 import cdr.mesh.datastructure.Mesh3D;
 import lucy.MoreMeshPrimitives;
 
 public class StackViewer {
-	
-	BlockManager bm;
-	StackManager sm;
-	
-	public void setBlockManager(BlockManager bm) {
-		this.bm = bm;
-	}
-	
-	public void setStackManager(StackManager sm) {
-		this.sm = sm;
-	}
 
-	public static List<Polygon3D> getViewableStack(StackManager sm, Polygon3D footprint, float floorToCeilingHeight) {
+	public static List<Polygon3D> getViewableStackPolygons(StackManager sm, Point3D footprint, float floorToCeilingHeight) {
 				
 		List<Polygon3D> viewableStack = new ArrayList<>();
 		
@@ -35,48 +27,104 @@ public class StackViewer {
 			return viewableStack;
 		}
 		
-		for (int i=0; i<sm.getStack(footprint).size(); i++) {		
-			viewableStack.add(new Polygon3D(footprint.iterablePoints()));
-			viewableStack.get(i).translate(new ArrayVector3D(0, 0, i*floorToCeilingHeight));
-		}
+		CopyOnWriteArrayList<String> stack = new CopyOnWriteArrayList<>(sm.getStack(footprint));
 		
+		try {
+			if (stack != null) {
+				for (int i=0; i<stack.size(); i++) {		
+					if (stack.get(i) != null) {
+						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
+						List<Polygon3D> units = sm.getUnits(floorplate);	
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*floorToCeilingHeight);
+						
+						for (Polygon3D unit : units) {
+							Polygon3D translated = new Polygon3D(unit.iterablePoints());
+							translated.translate(translate);
+							viewableStack.add(translated);
+						}
+					}
+				}
+			}
+		} catch (NullPointerException e) {
+			// TODO: handle exception
+		}
+
+	
 		return viewableStack;
 	}
 		
-	public static Map<String, List<Mesh3D>> getViewableStackUnits(StackManager sm, BlockManager bm, Polygon3D footprint, float floorToCeilingHeight) {
+	public static Map<String, List<Mesh3D>> getViewableStackMeshes(StackManager sm, Point3D footprint, float floorToCeilingHeight) {
 		
 		Map<String, List<Mesh3D>> viewableStackUnits = new HashMap<>();
-		
-		float e1 = footprint.getLineSegment(0).getLength();
-		float e2 =  footprint.getLineSegment(1).getLength();
-		
-		float minEdge = Math.min(e1,e2);
-		float maxEdge = Math.max(e1, e2);
 				
-		for (String unitType : bm.getUnitTypes()) {
-			viewableStackUnits.put(unitType, new ArrayList<>());
+		if (sm == null) {
+			return viewableStackUnits;
 		}
 		
-		CopyOnWriteArrayList<List<String>> list = new CopyOnWriteArrayList<>(sm.getStack(footprint));
+		for (String type : sm.getUnitTypes()) {
+			viewableStackUnits.put(type, new ArrayList<>());
+		}
 		
-		for (int i =0; i<list.size(); i++) {
-			
-			float offset = 0f;
-			
-			for (int j=0; j<list.get(i).size(); j++) {
+		CopyOnWriteArrayList<String> stack = new CopyOnWriteArrayList<>(sm.getStack(footprint));
+		
+		try {
+			if (stack != null) {
+				for (int i=0; i<stack.size(); i++) {		
+					if (stack.get(i) != null) {
+						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
+						List<Polygon3D> units = sm.getUnits(floorplate);	
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*floorToCeilingHeight);
+						
+						for (Polygon3D unit : units) {
+							Polygon3D translated = new Polygon3D(unit.iterablePoints());
+							String unitType = sm.getUnitType(unit);				
+							translated.translate(translate);
 							
-				float height = bm.getUnit(list.get(i).get(j)).area / minEdge;
-				float width = bm.getUnit(list.get(i).get(j)).area / height;
-							
-				Rectangle2D unit = new Rectangle2D(footprint.getAnchor().x(), footprint.getAnchor().y() + offset, width, height);
-				Polygon3D boundary = unit.getPolygon2D().getPolygon3D(i*floorToCeilingHeight);
-				
-				viewableStackUnits.get(list.get(i).get(j)).add(MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(boundary, floorToCeilingHeight));
-				
-				offset+= height;
+							if (unitType != null) {
+								viewableStackUnits.get(unitType).add(MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(translated, floorToCeilingHeight));		
+							}
+						}
+					}
+				}
 			}
+		} catch (NullPointerException e) {
+			// TODO: handle exception
+		}
+
+		return viewableStackUnits;
+	}
+
+	public static Map<Point3D, Float> getViewableStackValues(StackManager sm, StackEvaluator se, Point3D footprint) {
+		
+		Map<Point3D, Float> viewableStackValues = new HashMap<>();
+		
+		if (sm == null || se == null) {
+			return viewableStackValues;
 		}
 		
-		return viewableStackUnits;
+		CopyOnWriteArrayList<String> stack = new CopyOnWriteArrayList<>(sm.getStack(footprint));
+		
+		try {
+			if (stack != null) {
+				for (int i=0; i<stack.size(); i++) {		
+					if (stack.get(i) != null) {
+						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
+						List<Polygon3D> units = sm.getUnits(floorplate);	
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*se.floorToCeilingHeight);
+						
+						Point3D location = new ArrayPoint3D(floorplate);
+						location.translate(translate);
+												
+						float value = se.evaluateFloorValue(units, i+1);
+						
+						viewableStackValues.put(location, value);
+					}
+				}
+			}
+		} catch (NullPointerException e) {
+			// TODO: handle exception
+		}
+		
+		return viewableStackValues;
 	}
 }
