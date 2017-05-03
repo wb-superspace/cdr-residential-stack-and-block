@@ -1,4 +1,4 @@
-package main;
+package model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,8 +10,11 @@ import java.util.Stack;
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Text3D;
+import javafx.beans.property.SimpleBooleanProperty;
 
 public class StackManager {
+	
+	// TODO - make these classes
 	
 	/*
 	 * Boundary
@@ -36,23 +39,25 @@ public class StackManager {
 	Map<Point3D, List<Polygon3D>> units = new HashMap<>();
 	
 	/*
-	 * Unit
+	 * Unit 
 	 */
 	
 	Map<Polygon3D, String> unitTypes = new HashMap<>();
 		
-	Map<String, Integer> unitCounts = new HashMap<>();
+	public Map<String, Integer> unitCounts = new HashMap<>();
 	
-	Map<String, Float> unitAreas = new HashMap<>();
+	public Map<String, Float> unitAreas = new HashMap<>();
 	
-	Map<String, String> unitColors = new HashMap<>();
+	public Map<String, String> unitColors = new HashMap<>();
 	
-	Map<String, Float> unitValues = new HashMap<>();
+	public Map<String, Float> unitValues = new HashMap<>();
 	
 	/*
 	 * Save
 	 */
 	
+	private SimpleBooleanProperty flag = new SimpleBooleanProperty(false);
+		
 	private List<int[]> pointers;
 	
 	private Stack<Map<Point3D, Stack<String>>> restore;
@@ -75,6 +80,14 @@ public class StackManager {
 		}
 		
 		this.saveStacks();
+	}
+	
+	public void flag() {
+		this.flag.set(!this.flag.get());
+	}
+	
+	public SimpleBooleanProperty getFlag() {
+		return this.flag;
 	}
 	
 	public void point() {
@@ -265,6 +278,8 @@ public class StackManager {
 	
 	public void setStack(Point3D footprint, Stack<String> stack) {
 		this.stacks.put(footprint, stack);
+		
+		point();
 	}
 
 	public List<Polygon3D> getBoundaries() {

@@ -12,13 +12,39 @@
 <BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1">
 
 	<left>
+	   <AnchorPane BorderPane.alignment="TOP_LEFT">
+         <children>
+            <MenuBar AnchorPane.leftAnchor="8.0" AnchorPane.topAnchor="10.0">
+              <menus>
+                <Menu mnemonicParsing="false" text="File">
+                  <items>
+                        <MenuItem fx:id="importGeometryMenuItem" mnemonicParsing="false" text="Import Geometry (.dxf)..."/>
+                        <MenuItem fx:id="importUnitMixMenuItem" mnemonicParsing="false" text="Import Unit Mix (.csv)..."/>
+                  </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Run">
+                     <items>
+                        <MenuItem fx:id="evaluateModelMenuItem" mnemonicParsing="false" text="Evaluate" />	                  	
+                     </items>
+                 </Menu>
+              </menus>
+            </MenuBar>
+         </children>
+      </AnchorPane>
 	</left>
 	<right>
 	<AnchorPane>
 		<children>
-			<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="false" text="Unit Mix" >
-			</TitledPane>
+			<VBox>
+				<children>
+					<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="true" text="Unit Mix" />
+					<TitledPane fx:id="statisticsTitledPane" animated="false" expanded="true" text="Statistics" />
+				</children>
+			</VBox>
 		</children>
 	</AnchorPane>
 	</right>
+	<bottom>
+	<AnchorPane fx:id="chartAnchorPane" />
+	</bottom>
 </BorderPane>

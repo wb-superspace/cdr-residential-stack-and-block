@@ -1,4 +1,4 @@
-package main;
+package model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,11 +15,15 @@ import cdr.geometry.primitives.Rectangle2D;
 import cdr.geometry.primitives.Vector3D;
 import cdr.mesh.datastructure.Face;
 import cdr.mesh.datastructure.Mesh3D;
+import cdr.spacepartition.boundingObjects.BoundingBox;
+import cdr.spacepartition.boundingObjects.BoundingBox3D;
 import lucy.MoreMeshPrimitives;
 
 public class StackViewer {
+	
+	private static float D = 3; // explode distance
 
-	public static List<Polygon3D> getViewableStackPolygons(StackManager sm, Point3D footprint, float floorToCeilingHeight) {
+	public static List<Polygon3D> getViewableStackPolygons(StackManager sm, StackEvaluator se, Point3D footprint, boolean exploded) {
 				
 		List<Polygon3D> viewableStack = new ArrayList<>();
 		
@@ -35,7 +39,10 @@ public class StackViewer {
 					if (stack.get(i) != null) {
 						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
 						List<Polygon3D> units = sm.getUnits(floorplate);	
-						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*floorToCeilingHeight);
+						
+						float z = exploded ? i*se.floorToCeilingHeight*D : i*se.floorToCeilingHeight;
+						
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), z);
 						
 						for (Polygon3D unit : units) {
 							Polygon3D translated = new Polygon3D(unit.iterablePoints());
@@ -53,7 +60,7 @@ public class StackViewer {
 		return viewableStack;
 	}
 		
-	public static Map<String, List<Mesh3D>> getViewableStackMeshes(StackManager sm, Point3D footprint, float floorToCeilingHeight) {
+	public static Map<String, List<Mesh3D>> getViewableStackMeshes(StackManager sm, StackEvaluator se, Point3D footprint, boolean exploded) {
 		
 		Map<String, List<Mesh3D>> viewableStackUnits = new HashMap<>();
 				
@@ -73,7 +80,10 @@ public class StackViewer {
 					if (stack.get(i) != null) {
 						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
 						List<Polygon3D> units = sm.getUnits(floorplate);	
-						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*floorToCeilingHeight);
+						
+						float z = exploded ? i*se.floorToCeilingHeight*D : i*se.floorToCeilingHeight;
+						
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), z);
 						
 						for (Polygon3D unit : units) {
 							Polygon3D translated = new Polygon3D(unit.iterablePoints());
@@ -81,7 +91,7 @@ public class StackViewer {
 							translated.translate(translate);
 							
 							if (unitType != null) {
-								viewableStackUnits.get(unitType).add(MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(translated, floorToCeilingHeight));		
+								viewableStackUnits.get(unitType).add(MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(translated, se.floorToCeilingHeight));		
 							}
 						}
 					}
@@ -94,7 +104,7 @@ public class StackViewer {
 		return viewableStackUnits;
 	}
 
-	public static Map<Point3D, Float> getViewableStackValues(StackManager sm, StackEvaluator se, Point3D footprint) {
+	public static Map<Point3D, Float> getViewableStackValues(StackManager sm, StackEvaluator se, Point3D footprint, boolean exploded) {
 		
 		Map<Point3D, Float> viewableStackValues = new HashMap<>();
 		
@@ -108,11 +118,18 @@ public class StackViewer {
 			if (stack != null) {
 				for (int i=0; i<stack.size(); i++) {		
 					if (stack.get(i) != null) {
-						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
-						List<Polygon3D> units = sm.getUnits(floorplate);	
-						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), i*se.floorToCeilingHeight);
 						
-						Point3D location = new ArrayPoint3D(floorplate);
+						Point3D floorplate = sm.getFloorplate(sm.getFootprintType(footprint), stack.get(i));
+						
+						float z = exploded ? i*se.floorToCeilingHeight*D : i*se.floorToCeilingHeight;
+						
+						Vector3D translate = new ArrayVector3D(footprint.x()-floorplate.x(), footprint.y()-floorplate.y(), z);
+						
+						List<Polygon3D> units = sm.getUnits(floorplate);	
+						BoundingBox<Point3D> bbox = new BoundingBox3D();
+						bbox.addAllPolygons(units);
+						
+						Point3D location = bbox.getMax();
 						location.translate(translate);
 												
 						float value = se.evaluateFloorValue(units, i+1);

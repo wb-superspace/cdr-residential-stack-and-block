@@ -1,8 +1,8 @@
-package main;
+package model;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -10,11 +10,8 @@ import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
 
-import com.sun.javafx.image.IntPixelAccessor;
-
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
-import javafx.beans.property.SimpleBooleanProperty;
 
 
 public class StackEvaluator {
@@ -22,7 +19,7 @@ public class StackEvaluator {
 	public float floorplateCostBase = 125f; 							// AECOM
 	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
 	
-	public float unitValueThreshold = 2700000f;							// PAFILLIA
+	public float unitValueThreshold = Float.MAX_VALUE; //2700000f;							// PAFILLIA
 	public float unitPremiumFloorMultiplier = 0.015f; 					// AECOM (1.5% -> 2.2% (PH))
 	
 	float maxArea = 81747f;
@@ -32,10 +29,11 @@ public class StackEvaluator {
 	
 	private StackManager sm;
 	
-	private long sleep = 00l;
-		
-	List<Integer> mutations;
+	private long sleep = 0l;
 	
+	public Map<String, Integer> counts; // TODO - make observable
+	public float value; // TODO - make observable
+		
 	/*
 	 * =========================================================
 	 * EVALUATIONS
@@ -48,7 +46,7 @@ public class StackEvaluator {
 		float floorCost = 0f;
 
 		if (units == null) {
-			return 0f;
+			return floorCost;
 		}
 		
 		for (Polygon3D unit : units) {
@@ -115,8 +113,22 @@ public class StackEvaluator {
 		for (Point3D footprint : sm.getFootprints()) {
 			profit += evaluateStackProfit(footprint, sm.getStack(footprint));
 		}
-
+		
 		return profit;
+	}
+	
+	public float evaluateTotalCost() {
+		
+		float cost = 0;
+		
+		for (Point3D footprint : sm.getFootprints()) {
+			for (int i = 0; i<sm.getStack(footprint).size(); i++) {
+				cost += evaluateFloorCost(sm.getUnits(sm.getFloorplate(sm.getFootprintType(footprint),
+						sm.getStack(footprint).get(i))), i+1);
+			}				
+		}
+		
+		return cost;
 	}
 	
 	private float evaluateTotalArea() {
@@ -126,7 +138,7 @@ public class StackEvaluator {
 		for (Point3D footprint : sm.getFootprints()) {
 			area += sm.getFootprintArea(footprint) * sm.getStack(footprint).size();
 		}
-				
+						
 		return area;
 	}
 	
@@ -149,25 +161,28 @@ public class StackEvaluator {
 		
 		int count = 0;
 		
-		for (Point3D footprint : sm.getFootprints()) {
+		if (sm != null) {
 			
-			String footprintType = sm.getFootprintType(footprint);
-			
-			for (String floorplateType : sm.getStack(footprint)) {	
+			for (Point3D footprint : sm.getFootprints()) {
 				
-				Point3D floorplate = sm.getFloorplate(footprintType, floorplateType);
-				List<Polygon3D> units = sm.getUnits(floorplate);
+				String footprintType = sm.getFootprintType(footprint);
 				
-				if (units != null) {
-					for (String type : sm.getUnitTypes(footprintType, floorplateType)) {
-						if (type.equals(unitType)) {
-							count++;
+				for (String floorplateType : sm.getStack(footprint)) {	
+					
+					Point3D floorplate = sm.getFloorplate(footprintType, floorplateType);
+					List<Polygon3D> units = sm.getUnits(floorplate);
+					
+					if (units != null) {
+						for (String type : sm.getUnitTypes(footprintType, floorplateType)) {
+							if (type.equals(unitType)) {
+								count++;
+							}
 						}
 					}
 				}
 			}
 		}
-				
+						
 		return count;
 	}
 	
@@ -231,69 +246,73 @@ public class StackEvaluator {
 					sm.removeFloor(footprint, i);
 				}
 			}
-			
-			String footprintType = sm.getFootprintType(footprint);
-			
+						
 			for (int s=0; s<sm.getStack(footprint).size(); s++) {
 				for (int t=s+1; t<sm.getStack(footprint).size(); t++) {
+										
+					Stack<String> clone = sm.cloneStack(footprint);
+																									
+					sm.swapFloors(footprint, s, t);
 					
-					String sts = sm.getStack(footprint).get(s);
-					String stt = sm.getStack(footprint).get(t);
-																				
-					float vs = evaluateFloorValue(sm.getUnits(sm.getFloorplate(footprintType, sts)), t);
-					float vt = evaluateFloorValue(sm.getUnits(sm.getFloorplate(footprintType, stt)), t);
+					try {
+						Thread.sleep(sleep);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 					
-					if (vs > vt) {
-						sm.swapFloors(footprint, s, t);
+					float vc = evaluateStackProfit(footprint, clone);
+					float vt = evaluateStackProfit(footprint, sm.getStack(footprint));
+					
+					if (vc > vt) {
+						sm.setStack(footprint, clone);
 					}
 				}
 			}
 		}
 	}
-	
-	private void mutate(Point3D from, Point3D to, int mutations) {
 		
-		if (!sm.getStack(from).isEmpty()) {
-			for (int j = 0; j< new Random().nextInt(sm.getStack(from).size()); j++) {
-				if (!from.equals(to) && isPushFloorValid(from, to)) {					
-					sm.pushFloor(to, null);
-					sm.popFloor(from);
-				} 
-			}
-		}
+	private void mutate() {
 		
-		sm.point();
-		
-		for (int m = mutations; m > 0 ; ) {
-										
-			for (int[] pointer : sm.getPointers()) {				
-				if (sm.getStack(sm.getFootprints().get(pointer[0])).get(pointer[1]) == null) {
-					sm.getStack(sm.getFootprints().get(pointer[0])).set(pointer[1],
-							swap(sm.getFootprintType(sm.getFootprints().get(pointer[0])), null));
+		for (int i = new Random().nextInt(sm.getPointers().size()); i>=0 ; i--) {
+			
+			int[] pull = sm.getPointers().get(new Random().nextInt(sm.getPointers().size()));
+			int[] push = sm.getPointers().get(new Random().nextInt(sm.getPointers().size()));
+			
+			if (push[0] != pull[0]) {
+				
+				if (isPushFloorValid(sm.getFootprints().get(push[0]), sm.getFootprints().get(pull[0]))) {
+
+					sm.removeFloor(sm.getFootprints().get(push[0]), push[1]);
+					sm.pushFloor(sm.getFootprints().get(pull[0]), null);
 					
-					m--;
+					try {
+						Thread.sleep(sleep);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					
+					i--;
 				}
 			}
-									
-			int[] pointer = sm.getPointers().get(new Random().nextInt(sm.getPointers().size()));		
-			Point3D footprint = sm.getFootprints().get(pointer[0]);
-						
-			String footprintType = sm.getFootprintType(footprint);
-			String floorplateType = sm.getStack(footprint).get(pointer[1]);
 			
-			sm.getStack(footprint).set(pointer[1], swap(footprintType, floorplateType));	
-			
-			m--;
+			sm.point();
+		}
+		
+		for (int[] pointer : sm.getPointers()) {
+			if (sm.getStack(sm.getFootprints().get(pointer[0])).get(pointer[1]) == null) {
+				sm.getStack(sm.getFootprints().get(pointer[0])).set(pointer[1], 
+						swap(sm.getFootprintType(sm.getFootprints().get(pointer[0])), null));
+			}
 		}
 		
 		sort();
 	}
 		
-	private void initialize(StackManager sm) {
+	public void initialize(StackManager sm) {
 		
 		this.sm = sm;
-		
-		mutations = new ArrayList<>();
+		this.counts = new HashMap<>();
+		this.value = 0;
 		
 		sm.initialize();		
 				
@@ -311,19 +330,34 @@ public class StackEvaluator {
 				}			
 			}
 		}
+		
+		for (String unitType : sm.getUnitTypes()) {
+			this.counts.put(unitType, 0);
+		}
 
 		print();
 	}
+	
+	private void update() {
+
+		this.value =  evaluateTotalProfit();
 		
-	public void evaluate(StackManager stackManager) {
+		for (String unitType : sm.getUnitTypes()) {
+			this.counts.put(unitType, evaluateTotalUnitCount(unitType));
+		}
 		
-		initialize(stackManager);
+		sm.flag();
+	}
+			
+	public void evaluate(StackManager sm) {
+		
+		initialize(sm);
 				
 		SortedMap<Float, Map<Point3D, Stack<String>>> elite = new TreeMap<>();
 		
-		int cross = 5;
+		int cross = 20;
 		int mutate = 50;
-		int pool = 200;
+		int pool = 100;
 		
 		boolean flag = false;
 		
@@ -345,43 +379,34 @@ public class StackEvaluator {
 			for (Map.Entry<Float, Map<Point3D, Stack<String>>> f : front.entrySet()) {
 				
 				sm.restoreState(f.getValue());
-				
+								
 				float currValue = f.getKey();
 				boolean currFlag = false;
 				
+				if (currValue != 0) update();
+				
 				System.out.println("new pool : " + currValue);
 												
-				for (int p = pool ; p > 0 ; ) {
+				for (int p = pool ; p > 0 ; p--) {
+						
+					sm.saveStacks();
 					
-					for (Point3D push : sm.getFootprints()) {
-						for (Point3D pull : sm.getFootprints()) {
-							
-							if (!push.equals(pull)) {
-								
-								sm.saveStacks();
-								
-								mutate(push, pull, mutate);							
-								mutations.add(sm.getStackHash());
-														
-								float value = evaluateTotalProfit();
-								
-								if (value > currValue) {											
-									elite.put(value, sm.saveState());
-									currFlag = true;
-								}				
-		
-								try {
-									Thread.sleep(sleep);
-								} catch (InterruptedException e) {
-									e.printStackTrace();
-								}
-								
-								sm.restoreStacks();	
-								
-								p--;
-							}
-						}
+					mutate();							
+											
+					float value = evaluateTotalProfit();
+					
+					if (value > currValue) {											
+						elite.put(value, sm.saveState());
+						currFlag = true;			
+					}				
+
+					try {
+						Thread.sleep(sleep);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
 					}
+					
+					sm.restoreStacks();				
 				}
 								
 				if (!currFlag) {					
@@ -408,6 +433,8 @@ public class StackEvaluator {
 		Collections.reverse(values);	
 		
 		sm.restoreState(elite.get(values.get(0)));
+		
+		update();
 								
 		print();
 	}

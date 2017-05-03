@@ -38,22 +38,47 @@ import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.renderer.MeshRenderer3DFlatShaded;
 import cdr.mesh.renderer.MeshRenderer3DOutline;
 import cdr.spacepartition.boundingObjects.BoundingBox3D;
+import chart.StackChart;
 import fileio.CsvReader;
 import fileio.FileDialogs;
 import geometry.PolygonApproximationRectangular;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
+import model.StackEvaluator;
+import model.StackManager;
+import model.StackViewer;
 
 public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 	GeometryRenderer gr = new GeometryRenderer();
 	StackManager sm;
 	StackEvaluator se;
+	StackChart sc;
 	
 	GLUT glut = new GLUT();
+	
+	boolean renderExploded = false;
 		
 	@Override
 	protected GLCamera createCamera(GLFramework framework) {
 		return new GLCameraAxonometric(framework);
+	}
+	
+	@Override
+	public void initialiseRenderer(GLFramework framework) {
+		super.initialiseRenderer(framework);
+		
+		framework.getKeyListeners().add(new SimpleKeyListener(){
+			
+			public void keyTyped(KeyEvent e) {
+				
+				if(e.getKeyChar() == 't') {
+					
+					renderExploded = !renderExploded;
+				}
+			}
+		});
 	}
 
 	@Override
@@ -70,8 +95,9 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 								
 				for (Map.Entry<String, List<Mesh3D>> units : StackViewer.getViewableStackMeshes(
 						sm,
-						footprint,  
-						se.floorToCeilingHeight).entrySet()) {
+						se,
+						footprint,   
+						renderExploded).entrySet()) {
 
 					String color = sm.unitColors.get(units.getKey());
 					
@@ -90,7 +116,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						gr.renderPolygons3DFill(gl, unitFaces);
 						
 						gl.glLineWidth(0.1f);
-						gl.glColor3f(0f, 0f, 0f);
+						gl.glColor3f(0, 0, 0);
 						
 						gr.renderPolygons3DLines(gl, unitFaces);
 					}
@@ -120,13 +146,14 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				gr.renderPolygons3DLines(gl, 
 						StackViewer.getViewableStackPolygons(
 								sm,
+								se,
 								footprint, 
-								se.floorToCeilingHeight));
+								renderExploded));
 								
-				for (Map.Entry<Point3D, Float> valueEntry : StackViewer.getViewableStackValues(sm, se, footprint).entrySet()) {
+				for (Map.Entry<Point3D, Float> valueEntry : StackViewer.getViewableStackValues(sm, se, footprint, renderExploded).entrySet()) {
 										 
 					gl.glPushMatrix();
-					gl.glTranslatef(valueEntry.getKey().x()+10,valueEntry.getKey().y()+10, valueEntry.getKey().z());
+					gl.glTranslatef(valueEntry.getKey().x()+1,valueEntry.getKey().y()+1, valueEntry.getKey().z());
 					gl.glScalef(0.03f,0.03f,0.03f);
 					
 					gl.glColor3f(0,0,0); gl.glLineWidth(0.8f);
@@ -138,149 +165,104 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		}
 	}
 	
-	@Override
-	public void initialiseRenderer(GLFramework framework) {
-
-		super.initialiseRenderer(framework);
+	public void initialize() {	
+		
+		se.initialize(sm);
+	}
 	
-		framework.getKeyListeners().add(new SimpleKeyListener(){
+	public void evaluate() {
+		
+		sc.clearValues();
 			
-			public void keyTyped(KeyEvent e) {
-			
-				if (e.getKeyChar() == 'i') {
-			
-					Platform.runLater(new Runnable() {
-						
-						public void run() {
-
-							sm = new StackManager();
-							se = new StackEvaluator();
-														
-							importDXF();
-						}
-					});
+		new Thread(new Runnable() {
+		    public void run() {
+				if (se != null && sm != null) {					
+					se.evaluate(sm);
 				}
+		    }
+		}).start();
+	}
 				
-				if (e.getKeyChar() == 'd') {
+	public void importDXF() {
 					
-					Platform.runLater(new Runnable() {
-						
-						@Override
-						public void run() {
-														
-							importCSV();
-						}
-					});
-				}
-																
-				if (e.getKeyChar() == 'e') {
-					
-					Platform.runLater(new Runnable() {
-						
-						@Override
-						public void run() {
+		sm = new StackManager();
+		se = new StackEvaluator();
+		sc = new StackChart();
+
+		File file = FileDialogs.openFileFX("dxf");
+		
+		if(file != null) {
+			
+			DXFDocument2 dxf = new DXFDocument2(file);	
+			dxf.getPolygons3D("BOUNDARY", sm.getBoundaries());
 							
-							se.evaluate(sm);
-						}
-					});
+			for (String layerName : dxf.getLayerNames()) {
+				
+				if (layerName.contains("FOOTPRINT$")) {
+					
+					String[] layerString = layerName.split("\\$");
+					String footprintType = layerString[1];
+					
+					List<Point3D> locations = new ArrayList<>();
+					
+					dxf.getPoints3D(layerName, locations);							
+					sm.addFootprint(footprintType, locations);
 				}
 			}
-		});
-	}
 			
-	private void importDXF() {
-		
-		Platform.runLater(new Runnable() {
-			
-			@Override
-			public void run() {
-
-				File file = FileDialogs.openFileFX("dxf");
-				
-				if(file != null) {
+			for (String layerName : dxf.getLayerNames()) {
+										
+				if (layerName.contains("FLOORPLATE$")) {
 					
-					DXFDocument2 dxf = new DXFDocument2(file);	
-					dxf.getPolygons3D("BOUNDARY", sm.getBoundaries());
-									
-					for (String layerName : dxf.getLayerNames()) {
-						
-						if (layerName.contains("FOOTPRINT$")) {
-							
-							String[] layerString = layerName.split("\\$");
-							String footprintType = layerString[1];
-							
-							List<Point3D> locations = new ArrayList<>();
-							
-							dxf.getPoints3D(layerName, locations);							
-							sm.addFootprint(footprintType, locations);
-						}
+					String[] layerString = layerName.split("\\$");
+					String footprintType = layerString[1];
+					String floorplateType = layerString[2];
+					
+					List<Point3D> floorplate = new ArrayList<>();
+					List<Polygon3D> units = new ArrayList<>();
+					List<Text3D> unitTypes = new ArrayList<>();
+					
+					dxf.getPolygons3D(layerName, units);
+					dxf.getPoints3D(layerName, floorplate);
+					dxf.getText3D(layerName, unitTypes);
+					
+					if (floorplate.size() != 1) {
+						System.out.println("invalid anchor - skipping");
+						continue;
 					}
 					
-					for (String layerName : dxf.getLayerNames()) {
+					for (Polygon3D unit : units) {							
+						if (unit.getPlane3D().c() < 0) {
+							unit.reverseWinding();
+						}
+					}
 												
-						if (layerName.contains("FLOORPLATE$")) {
-							
-							String[] layerString = layerName.split("\\$");
-							String footprintType = layerString[1];
-							String floorplateType = layerString[2];
-							
-							List<Point3D> floorplate = new ArrayList<>();
-							List<Polygon3D> units = new ArrayList<>();
-							List<Text3D> unitTypes = new ArrayList<>();
-							
-							dxf.getPolygons3D(layerName, units);
-							dxf.getPoints3D(layerName, floorplate);
-							dxf.getText3D(layerName, unitTypes);
-							
-							if (floorplate.size() != 1) {
-								System.out.println("invalid anchor - skipping");
-								continue;
-							}
-							
-							for (Polygon3D unit : units) {							
-								if (unit.getPlane3D().c() < 0) {
-									unit.reverseWinding();
-								}
-							}
-														
-							sm.addFloorplate(footprintType, floorplateType, floorplate.get(0), unitTypes, units);
-						}
-					}
-				}	
-			}
-		});
-	}
-	
-	private void importCSV() {
-		
-		Platform.runLater(new Runnable() {
-			
-			@Override
-			public void run() {
-								
-				File file = FileDialogs.openFileFX("csv");
-				
-				if (file != null) {
-					
-					List<String[]> lines = CsvReader.getCSVLines(file);
-					lines.remove(0);
-					
-					for(String [] line : lines) {
-						
-						String unitType = line[0].trim();
-						Integer unitCount = Integer.parseInt(line[1].trim());
-						Float unitArea = Float.parseFloat(line[2].trim());
-						Float unitValue = Float.parseFloat(line[3].trim());
-						String unitColor = line[4].trim();
-
-						sm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
-					}
-					
-					System.out.println(sm.unitAreas);
-					System.out.println(sm.unitCounts);
-					System.out.println(sm.unitValues);
+					sm.addFloorplate(footprintType, floorplateType, floorplate.get(0), unitTypes, units);
 				}
 			}
-		});
+		}	
+	}
+
+	
+	public void importCSV() {
+							
+		File file = FileDialogs.openFileFX("csv");
+		
+		if (file != null) {
+			
+			List<String[]> lines = CsvReader.getCSVLines(file);
+			lines.remove(0);
+			
+			for(String [] line : lines) {
+				
+				String unitType = line[0].trim();
+				Integer unitCount = Integer.parseInt(line[1].trim());
+				Float unitArea = Float.parseFloat(line[2].trim());
+				Float unitValue = Float.parseFloat(line[3].trim());
+				String unitColor = line[4].trim();
+
+				sm.addUnit(unitType, unitCount, unitArea, unitValue, unitColor);
+			}
+		}
 	}
 }
