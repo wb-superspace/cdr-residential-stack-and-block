@@ -6,21 +6,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
-
+import cdr.geometry.primitives.ArrayVector3D;
+import cdr.geometry.primitives.LineSegment3D;
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Text3D;
+import cdr.mesh.datastructure.Mesh3D;
+import cdr.mesh.datastructure.fvMesh.FVMesh;
+import cdr.mesh.toolkit.operators.MeshOperators;
 import javafx.beans.property.SimpleBooleanProperty;
+import lucy.MoreMeshPrimitives;
 
 public class StackManager {
-	
-	// TODO - make these classes
-	
+		
 	/*
-	 * Boundary
+	 * Attributes
 	 */
 	
+	public float floorToCeilingHeight = 4f;
+	
+	public float viewHeight = 1.8f;
+	
+	/*
+	 * Properties
+	 */
+	
+	List<Point3D> views = new ArrayList<>();	
+	
 	List<Polygon3D> boundaries = new ArrayList<>();
+	
+	List<Mesh3D> context = new ArrayList<>();
 	
 	/*
 	 * Foorprint
@@ -43,7 +58,15 @@ public class StackManager {
 	 */
 	
 	Map<Polygon3D, String> unitTypes = new HashMap<>();
+	
+	Map<Polygon3D, List<Point3D>> unitAnalysisPoints = new HashMap<>();
+	
+	Map<Polygon3D, Mesh3D> unitAnalysisMeshes = new HashMap<>();
 		
+	/*
+	 * Unit matrix
+	 */
+	
 	public Map<String, Integer> unitCounts = new HashMap<>();
 	
 	public Map<String, Float> unitAreas = new HashMap<>();
@@ -52,23 +75,26 @@ public class StackManager {
 	
 	public Map<String, Float> unitValues = new HashMap<>();
 	
+	public Map<String, Float> unitCaps = new HashMap<>();
+	
 	/*
 	 * Save
 	 */
-	
+		
 	private SimpleBooleanProperty flag = new SimpleBooleanProperty(false);
 		
-	private List<int[]> pointers;
-	
-	private Stack<Map<Point3D, Stack<String>>> restore;
+	private List<int[]> pointers = new ArrayList<>();
+		
+	private Stack<Map<Point3D, Stack<String>>> restore = new Stack<>();
 	
 	private Map<Point3D, Stack<String>> stacks = new HashMap<>();
 	
+		
 	/*
 	 * Run
 	 */
 	
-	public void initialize() {
+	public void reset() {
 		
 		restore = new Stack<>();
 		
@@ -76,10 +102,10 @@ public class StackManager {
 		
 		for (Point3D footprint : this.getFootprints()) {
 			this.getStack(footprint).clear();
-		
 		}
 		
 		this.saveStacks();
+
 	}
 	
 	public void flag() {
@@ -93,10 +119,11 @@ public class StackManager {
 	public void point() {
 		
 		pointers.clear();	
-				
-		for (int j=0; j<footprints.size(); j++) {		
-			for (int k =0;k<this.getStack(footprints.get(j)).size(); k++) {
-				pointers.add(new int[] {j,k});			
+						
+		for (int j=0; j<footprints.size(); j++) {	
+			
+			for (int k =0;k< this.getStack(footprints.get(j)).size(); k++) {
+				pointers.add(new int[] {j,k});	
 			}	
 		}
 	}
@@ -138,15 +165,46 @@ public class StackManager {
 		return area;
 	}
 	
-	public void addFloorplate(String footprintType, String floorplateType, Point3D floorplate, List<Text3D> unitTypes, List<Polygon3D> units) {
+	public void addFloorplate(String footprintType, String floorplateType, Point3D floorplate, List<Text3D> unitTypes,
+			List<Polygon3D> units, List<LineSegment3D> analysisLocations) {
+		
+		if (!this.floorplates.containsKey(footprintType)) { // TODO - maybe return instead?
+			this.addFootprint(footprintType, new ArrayList<>());
+		}
 		
 		this.floorplates.get(footprintType).put(floorplateType, floorplate);
 		this.units.put(floorplate, units);
 		
 		for (Polygon3D unit : units) {
+			
+			Mesh3D analysisMesh = MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(unit, this.floorToCeilingHeight);
+			new MeshOperators().triangulateMesh(analysisMesh);
+			this.unitAnalysisMeshes.put(unit, analysisMesh);
+			
 			for (Text3D unitType : unitTypes) {
 				if (unit.isInside(unitType.getAnchor())) {
 					this.unitTypes.put(unit, unitType.getString().trim());
+				}
+			}
+			
+			this.unitAnalysisPoints.put(unit, new ArrayList<>());
+			
+			for (LineSegment3D analysisLocation : analysisLocations) {
+				
+				boolean sptIsInside = unit.isInside(analysisLocation.getStartPoint());
+				boolean eptIsInside = unit.isInside(analysisLocation.getEndPoint());
+				
+				if (sptIsInside && !eptIsInside) {
+					
+					Point3D analysisPoint = analysisLocation.getEndPoint();
+					analysisPoint.translate(new ArrayVector3D(0, 0, viewHeight));
+					this.unitAnalysisPoints.get(unit).add(analysisPoint);
+					
+				} else if (eptIsInside && !sptIsInside) {
+					
+					Point3D analysisPoint = analysisLocation.getStartPoint();
+					analysisPoint.translate(new ArrayVector3D(0, 0, viewHeight));
+					this.unitAnalysisPoints.get(unit).add(analysisPoint);
 				}
 			}
 		}
@@ -169,6 +227,8 @@ public class StackManager {
 		
 		stack.set(f1, s2);
 		stack.set(f2, s1);
+		
+		point();
 	}
 	
 	public void pushFloor(Point3D footprint, String floorplate) {
@@ -197,13 +257,14 @@ public class StackManager {
 	}
 	
 	public List<Polygon3D> getUnits(Point3D floorplate) {
-		return this.units.get(floorplate);
+		return this.units.containsKey(floorplate) ? this.units.get(floorplate) : new ArrayList<>();
 	}
 	
-	public void addUnit(String type, Integer count, Float area, Float value, String color) {
+	public void addUnit(String type, Integer count, Float area, Float value, Float cap, String color) {
 		this.unitCounts.put(type, count);
 		this.unitAreas.put(type, area);
 		this.unitValues.put(type, value);
+		this.unitCaps.put((cap == 0 ? null : type), (cap == 0 ? Float.MAX_VALUE : cap));
 		this.unitColors.put(type, color);
 	}
 			
@@ -228,11 +289,24 @@ public class StackManager {
 		return this.unitTypes.get(unit);
 	}
 	
+	public List<Point3D> getUnitAnalysisPoints(Polygon3D unit) {
+		return this.unitAnalysisPoints.get(unit);
+	}
+	
+	public Mesh3D getUnitAnalysisMesh(Polygon3D unit) {
+		
+		Mesh3D analysisMesh = new FVMesh.D3();
+				
+		new MeshOperators().duplicateMesh(this.unitAnalysisMeshes.get(unit), analysisMesh);
+		
+		return analysisMesh;
+	}
+	
 	public Integer getStackHash() {
 		
 		String stackString = "";
 		
-		for (int[] pointer : this.pointers) {
+		for (int[] pointer : this.getPointers()) {
 			stackString += pointer[0] + "-" + 
 				pointer[1] + "-" + 
 				this.getStack(this.getFootprints().get(pointer[0])).get(pointer[1]) + "-";
@@ -244,7 +318,7 @@ public class StackManager {
 	public Stack<String> getStack(Point3D footprint) {
 		return this.stacks.get(footprint);
 	}
-	
+			
 	public void saveStacks() {
 		restore.push(saveState());
 	}
@@ -265,6 +339,8 @@ public class StackManager {
 		for (Map.Entry<Point3D, Stack<String>> entry : state.entrySet()) {
 			this.setStack(entry.getKey(), this.cloneStack(entry.getValue()));
 		}
+		
+		point();
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -281,12 +357,28 @@ public class StackManager {
 		
 		point();
 	}
+	
+	public List<Mesh3D> getContext() {
+		return this.context;
+	}
+	
+	public void setContext(List<Mesh3D> context) {
+		this.context = context;
+	}
 
 	public List<Polygon3D> getBoundaries() {
-		return boundaries;
+		return this.boundaries;
 	}
 
 	public void setBoundaries(List<Polygon3D> boundaries) {
 		this.boundaries = boundaries;
+	}
+	
+	public List<Point3D> getViewPoints() {
+		return this.views;
+	}
+	
+	public void setViewPoints(List<Point3D> viewPoints) {
+		this.views = viewPoints;
 	}
 }

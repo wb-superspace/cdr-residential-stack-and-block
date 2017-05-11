@@ -24,7 +24,9 @@
                 </Menu>
                 <Menu mnemonicParsing="false" text="Run">
                      <items>
-                        <MenuItem fx:id="evaluateModelMenuItem" mnemonicParsing="false" text="Evaluate" />	                  	
+                        <MenuItem fx:id="startMenuItem" mnemonicParsing="false" text="Start" />
+                        <MenuItem fx:id="stopMenuItem" mnemonicParsing="false" text="Stop" />	 
+                        <MenuItem fx:id="resetMenuItem" mnemonicParsing="false" text="Reset" />	 	                  	
                      </items>
                  </Menu>
               </menus>
@@ -39,12 +41,20 @@
 				<children>
 					<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="true" text="Unit Mix" />
 					<TitledPane fx:id="statisticsTitledPane" animated="false" expanded="true" text="Statistics" />
+					<TitledPane fx:id="legendTitledPane" animated="false" expanded="true" text="Legend" />
 				</children>
 			</VBox>
 		</children>
 	</AnchorPane>
 	</right>
 	<bottom>
-	<AnchorPane fx:id="chartAnchorPane" />
+	<TitledPane text="Generations" animated="false">	
+		<content>
+			<AnchorPane fx:id="chartAnchorPane" >
+				<padding><Insets top="0" right="0" bottom="0" left="0"/></padding>
+			</AnchorPane>
+		</content>
+	</TitledPane>
+	
 	</bottom>
 </BorderPane>

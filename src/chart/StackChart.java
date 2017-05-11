@@ -38,8 +38,8 @@ public class StackChart {
 		series.setName("Generation");
 		
 		chart.getData().add(series);	
-		chart.setCategoryGap(-1);
-		chart.setBarGap(-1);
+		chart.setCategoryGap(0.1);
+		chart.setBarGap(0.1);
 		//chart.setStyle("CHART_COLOR_1: #000000;");
 		
 		ChangeListener<Number> updateListener = new ChangeListener<Number>() {
@@ -49,22 +49,35 @@ public class StackChart {
 				valueAxis.setTickUnit((int)((maxValue.get() - minValue.get()) / 10f));
 			}
 		};
-		
+	
 		minValue.addListener(updateListener);
 		maxValue.addListener(updateListener);
-
+		
+		reset();
 	}
 	
 	public BarChart<String, Number> get() {
 		return chart;
 	}
 	
-	public void clearValues() {
-		series.getData().clear();
+	public void reset() {
+		
 		generation = 0;
+		
+		series.getData().clear();
+		
+		valueAxis.setLowerBound(0);
+		valueAxis.setUpperBound(1);
+		
+		minValue.set(Float.MAX_VALUE);
+		maxValue.set(Float.MIN_VALUE);
 	}
 	
 	public void addValue(Float value) {
+		
+		if (series.getData().size() > 200) {
+			series.getData().remove(0);
+		}
 				
 		if (value < minValue.get()) {
 			minValue.set(value);

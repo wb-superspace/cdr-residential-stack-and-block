@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.ResourceBundle;
 
 import cdr.colour.HEXColour;
+import cdr.colour.HSVColour;
 import cdr.gui.javaFX.JavaFXGUI;
 import chart.StackChart;
 import javafx.application.Platform;
@@ -32,12 +33,16 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	public TitledPane unitMixTitledPane;
 	public TitledPane statisticsTitledPane;
+	public TitledPane legendTitledPane;
 	
 	public AnchorPane chartAnchorPane;
 	
 	public MenuItem importGeometryMenuItem;
 	public MenuItem importUnitMixMenuItem;
-	public MenuItem evaluateModelMenuItem;
+	
+	public MenuItem startMenuItem;
+	public MenuItem stopMenuItem;
+	public MenuItem resetMenuItem;
 	
 	public ResidentialStackingMain(ResidentialStackingRenderer application) {
 		super(application);
@@ -93,18 +98,33 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			@Override
 			public void handle(ActionEvent event) {
 				application.importCSV();	
-				application.initialize();
 				
 				initializeTitledPanes();
 				initializeChart();
 			}
 		});
 		
-		evaluateModelMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+		startMenuItem.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
-				application.evaluate();		
+				application.start();		
+			}
+		});
+		
+		stopMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+				application.stop();
+			}
+		});
+		
+		resetMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+				application.reset();
 			}
 		});
 	}
@@ -114,7 +134,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 		Chart chart = application.sc.get();
 	
 		chart.setPrefHeight(100);
-		chart.prefWidthProperty().bind(chartAnchorPane.widthProperty().multiply(0.9f));
+		chart.prefWidthProperty().bind(chartAnchorPane.widthProperty().multiply(0.95f));
 		
 		chartAnchorPane.getChildren().add(chart);
 		
@@ -138,6 +158,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 				updateUnitMixTitledPane();
 				updateStatisticsTitledPane();
+				updateLegendTitledPane();
 			}
 		});
 	}
@@ -147,8 +168,46 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 		Platform.runLater(new Runnable() {
 			
 			@Override
+			public void run() {			
+				application.sc.addValue(application.se.value.get());
+			}
+		});
+	}
+	
+	private void updateLegendTitledPane() {
+		
+		Platform.runLater(new Runnable() {
+			
+			@Override
 			public void run() {
-				application.sc.addValue(application.se.value);
+					
+				VBox legendVBox = new VBox();
+				ObservableList<LegendItem> legendLegendItems = FXCollections.observableArrayList();
+				
+				int legendCount = 10;
+				String legendType = application.renderTypes[application.renderType];
+				
+				if (legendType != "type") {
+					
+					float[] bounds = new float[] {0,1f};
+										
+					for (float i = bounds[0]; i<bounds[1]; i+= (bounds[1]-bounds[0]) / legendCount) {
+						
+						float value = (i - bounds[0]) / (bounds[1] - bounds[0]);	
+						
+						HSVColour c = new HSVColour() ;
+						c.setHSV((1-(value)) * 0.6f, 1f, 1f) ;
+						
+						float[] col = new float[]{c.red(), c.green(), c.blue()};
+						
+						LegendItem legendItem = new LegendItem(null, Float.toString(i), col);
+						
+						legendLegendItems.add(legendItem);
+					}
+				}
+					
+				legendVBox.getChildren().add(new VBoxLegend<>(legendLegendItems, 150, 3));
+				legendTitledPane.setContent(legendVBox);
 			}
 		});
 	}
@@ -165,7 +224,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 				float[] col = new float[]{0,0,0};
 				
-				String label = "VALUE : " + application.se.value;
+				String label = "VALUE : " + application.se.value.get();
 				
 				LegendItem legendItem = new LegendItem(null, label, col);
 							
