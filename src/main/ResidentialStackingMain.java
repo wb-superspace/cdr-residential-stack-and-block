@@ -26,6 +26,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
+import model.StackAnalysis;
 
 public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRenderer> implements Initializable{
 
@@ -39,10 +40,11 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	public MenuItem importGeometryMenuItem;
 	public MenuItem importUnitMixMenuItem;
+	public MenuItem exportUnitDataMenuItem;
 	
 	public MenuItem startMenuItem;
 	public MenuItem stopMenuItem;
-	public MenuItem resetMenuItem;
+	public MenuItem resumeMenuItem;
 	
 	public ResidentialStackingMain(ResidentialStackingRenderer application) {
 		super(application);
@@ -104,6 +106,14 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			}
 		});
 		
+		exportUnitDataMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+				application.exportCSV();
+			}
+		});
+		
 		startMenuItem.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
@@ -120,11 +130,11 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			}
 		});
 		
-		resetMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+		resumeMenuItem.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
-				application.reset();
+				application.resume();
 			}
 		});
 	}
@@ -161,6 +171,14 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				updateLegendTitledPane();
 			}
 		});
+		
+		application.renderAttribute.addListener(new ChangeListener<Number>() {
+
+			@Override
+			public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
+				updateLegendTitledPane();
+			}
+		});
 	}
 		
 	private void updateChart() {
@@ -185,11 +203,11 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				ObservableList<LegendItem> legendLegendItems = FXCollections.observableArrayList();
 				
 				int legendCount = 10;
-				String legendType = application.renderTypes[application.renderType];
+				String legendType = application.renderAttributes[application.renderAttribute.get()];
 				
 				if (legendType != "type") {
 					
-					float[] bounds = new float[] {0,1f};
+					float[] bounds = StackAnalysis.getBounds(application.se.getAnalysisStacks(), legendType);
 										
 					for (float i = bounds[0]; i<bounds[1]; i+= (bounds[1]-bounds[0]) / legendCount) {
 						
@@ -207,6 +225,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				}
 					
 				legendVBox.getChildren().add(new VBoxLegend<>(legendLegendItems, 150, 3));
+				legendTitledPane.setText("Legend [" + legendType + "]" );
 				legendTitledPane.setContent(legendVBox);
 			}
 		});
@@ -224,11 +243,11 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 				float[] col = new float[]{0,0,0};
 				
-				String label = "VALUE : " + application.se.value.get();
-				
-				LegendItem legendItem = new LegendItem(null, label, col);
+				LegendItem valueLegendItem = new LegendItem(null, "VALUE : " + application.se.value.get(), col);
+				LegendItem deltaLegendItem = new LegendItem(null, "DELTA : " + application.se.delta.get(), col);
 							
-				statisticsLegendItems.add(legendItem);
+				statisticsLegendItems.add(valueLegendItem);
+				statisticsLegendItems.add(deltaLegendItem);
 
 				statisticsVBox.getChildren().add(new VBoxLegend<>(statisticsLegendItems, 150, 3));
 				statisticsTitledPane.setContent(statisticsVBox);

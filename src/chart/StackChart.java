@@ -75,7 +75,7 @@ public class StackChart {
 	
 	public void addValue(Float value) {
 		
-		if (series.getData().size() > 200) {
+		if (series.getData().size() > 500) {
 			series.getData().remove(0);
 		}
 				

@@ -20,13 +20,15 @@
                   <items>
                         <MenuItem fx:id="importGeometryMenuItem" mnemonicParsing="false" text="Import Geometry (.dxf)..."/>
                         <MenuItem fx:id="importUnitMixMenuItem" mnemonicParsing="false" text="Import Unit Mix (.csv)..."/>
+                        <SeparatorMenuItem mnemonicParsing="false" />
+                        <MenuItem fx:id="exportUnitDataMenuItem" mnemonicParsing="false" text="Export Unit Data (.csv)..."/>
                   </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Run">
                      <items>
                         <MenuItem fx:id="startMenuItem" mnemonicParsing="false" text="Start" />
                         <MenuItem fx:id="stopMenuItem" mnemonicParsing="false" text="Stop" />	 
-                        <MenuItem fx:id="resetMenuItem" mnemonicParsing="false" text="Reset" />	 	                  	
+                        <MenuItem fx:id="resumeMenuItem" mnemonicParsing="false" text="Resume" />	 	                  	
                      </items>
                  </Menu>
               </menus>

@@ -23,6 +23,16 @@ public class StackManager {
 	 * Attributes
 	 */
 	
+	public float maxArea = Float.MAX_VALUE; 
+	
+	public float maxHeight = Float.MAX_VALUE; 
+	
+	public float floorplateCostBase = 125f; 							// AECOM
+	
+	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
+	
+	public float unitPremiumFloorMultiplier = 0.022f; 					// AECOM (1.5% -> 2.2% (PH))
+		
 	public float floorToCeilingHeight = 4f;
 	
 	public float viewHeight = 1.8f;
@@ -51,6 +61,8 @@ public class StackManager {
 	
 	Map<String, Map<String, Point3D>> floorplates = new HashMap<>();
 	
+	Map<Point3D, String> floorplateTypes = new HashMap<>();
+	
 	Map<Point3D, List<Polygon3D>> units = new HashMap<>();
 	
 	/*
@@ -62,14 +74,14 @@ public class StackManager {
 	Map<Polygon3D, List<Point3D>> unitAnalysisPoints = new HashMap<>();
 	
 	Map<Polygon3D, Mesh3D> unitAnalysisMeshes = new HashMap<>();
-		
+	
+	Map<Polygon3D, Float> unitAreas = new HashMap<>();
+	
 	/*
 	 * Unit matrix
 	 */
 	
 	public Map<String, Integer> unitCounts = new HashMap<>();
-	
-	public Map<String, Float> unitAreas = new HashMap<>();
 	
 	public Map<String, String> unitColors = new HashMap<>();
 	
@@ -173,6 +185,7 @@ public class StackManager {
 		}
 		
 		this.floorplates.get(footprintType).put(floorplateType, floorplate);
+		this.floorplateTypes.put(floorplate, floorplateType);
 		this.units.put(floorplate, units);
 		
 		for (Polygon3D unit : units) {
@@ -180,6 +193,7 @@ public class StackManager {
 			Mesh3D analysisMesh = MoreMeshPrimitives.makeExtrudedMeshFromPolygon3D(unit, this.floorToCeilingHeight);
 			new MeshOperators().triangulateMesh(analysisMesh);
 			this.unitAnalysisMeshes.put(unit, analysisMesh);
+			this.unitAreas.put(unit, unit.area());
 			
 			for (Text3D unitType : unitTypes) {
 				if (unit.isInside(unitType.getAnchor())) {
@@ -212,6 +226,10 @@ public class StackManager {
 	
 	public Set<String> getFloorplateTypes(String footprintType) {
 		return this.floorplates.get(footprintType).keySet();
+	}
+	
+	public String getFloorplateType(Point3D floorplate) {
+		return this.floorplateTypes.get(floorplate);
 	}
 	
 	public Point3D getFloorplate(String footprintType, String floorplateType) {
@@ -256,13 +274,19 @@ public class StackManager {
 		return floorplateType;
 	}
 	
+	public void addFloor(Point3D footprint, String floorplate, int floorIndex) {
+		
+		this.getStack(footprint).insertElementAt(floorplate, floorIndex);
+		
+		point();
+	}
+	
 	public List<Polygon3D> getUnits(Point3D floorplate) {
 		return this.units.containsKey(floorplate) ? this.units.get(floorplate) : new ArrayList<>();
 	}
 	
-	public void addUnit(String type, Integer count, Float area, Float value, Float cap, String color) {
+	public void addUnit(String type, Integer count, Float value, Float cap, String color) {
 		this.unitCounts.put(type, count);
-		this.unitAreas.put(type, area);
 		this.unitValues.put(type, value);
 		this.unitCaps.put((cap == 0 ? null : type), (cap == 0 ? Float.MAX_VALUE : cap));
 		this.unitColors.put(type, color);
@@ -284,6 +308,10 @@ public class StackManager {
 		
 		return unitTypes;
 	}
+	
+	public Float getUnitArea(Polygon3D unit) {
+		return this.unitAreas.get(unit);
+	}
 		
 	public String getUnitType(Polygon3D unit) {	
 		return this.unitTypes.get(unit);
@@ -302,19 +330,28 @@ public class StackManager {
 		return analysisMesh;
 	}
 	
-	public Integer getStackHash() {
+	public String getHashString() {
 		
-		String stackString = "";
+		String hashString = "";
 		
-		for (int[] pointer : this.getPointers()) {
-			stackString += pointer[0] + "-" + 
-				pointer[1] + "-" + 
-				this.getStack(this.getFootprints().get(pointer[0])).get(pointer[1]) + "-";
+		for (Point3D footprint : this.getFootprints()) {
+			hashString += this.getStackHashString(footprint);
 		}
 		
-		return stackString.hashCode();
+		return hashString;
 	}
 	
+	private String getStackHashString(Point3D footprint) {
+		
+		String hashString = "|" + this.getFootprintType(footprint);
+		
+		for (String floorplateType : this.getStack(footprint)) {
+			hashString += "|"+ floorplateType;
+		}
+		
+		return hashString;
+	}
+			
 	public Stack<String> getStack(Point3D footprint) {
 		return this.stacks.get(footprint);
 	}

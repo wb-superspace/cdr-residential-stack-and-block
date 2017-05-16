@@ -22,146 +22,111 @@ import cdr.mesh.datastructure.fvMesh.FVMesh;
 import cdr.mesh.toolkit.operators.MeshOperators;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleFloatProperty;
-import javafx.beans.property.SimpleMapProperty;
-import javafx.collections.FXCollections;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisUnit;
 
-
 public class StackEvaluator {
-	
-	public float floorplateCostBase = 125f; 							// AECOM
-	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
-	public float unitPremiumFloorMultiplier = 0.015f; 					// AECOM (1.5% -> 2.2% (PH))
-	
-	float maxArea = 81747f;
-	float maxHeight = 170f;
-	
+		
 	private StackManager sm;
 	
 	private long sleep = 0l;
 	
-	public Set<Integer> hashes;	
+	public Set<String> hashes;	
 	
 	public Map<Point3D, Stack<AnalysisFloor>> analysis = new ConcurrentHashMap<>();
 	
 	public Map<String, Integer> counts = new ConcurrentHashMap<>();
+		
+	public SimpleFloatProperty value = new SimpleFloatProperty(-Float.MAX_VALUE);
 	
-	public SimpleFloatProperty value = new SimpleFloatProperty(0);
+	public SimpleFloatProperty delta = new SimpleFloatProperty(0f);
 	
 	public SimpleBooleanProperty evaluate = new SimpleBooleanProperty(false);
 	
 	RayTracer rt = new RayTracer();
-	
-	/*
-	 * =========================================================
-	 * BOUNDS
-	 * =========================================================
-	 */
 		
-	public float[] getBounds( Map<Point3D, Stack<AnalysisFloor>> analysisStacks, String valueType) {
-		
-		float min = Float.MAX_VALUE;
-		float max = Float.MIN_VALUE;
-		
-		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
-		
-			for (AnalysisFloor analysisFloor: analysisStack) {
-				for (AnalysisUnit analysisUnit: analysisFloor.getAnalysisUnits()) {
-					
-					if (analysisUnit.getType() != null) {
-						
-						switch (valueType) {
-						case "value":
-							
-							if (analysisUnit.value > max) max = analysisUnit.value;
-							if (analysisUnit.value < min) min = analysisUnit.value;
-							
-							break;
-						case "visibility":
-							
-							if (analysisUnit.visibility > max) max = analysisUnit.visibility;
-							if (analysisUnit.visibility < min) min = analysisUnit.visibility;
-							
-							break;
-						default:
-							
-							min = 0;
-							max = 1;
-							
-							break;
-						}
-					}	
-				}
-			}
-		}
-		
-		return new float[] {min, max};
-	}
-	
 	/*
 	 * =========================================================
 	 * EVALUATIONS
 	 * =========================================================
 	 */
 		
-	public void evaluateFloorValue(AnalysisFloor analysisFloor) {
+	public void evaluateFloor(AnalysisFloor analysisFloor) {
+		
+		float floorCost = 0f;
+		float floorValue = 0f;
 		
 		for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
 			
-			String unitType = analysisUnit.getType();
-						
+			String unitType = analysisUnit.getUnitType();
+			
+			float unitArea = analysisUnit.getArea(); 
+			float baseCost = sm.floorplateCostFloorMultiplier * (analysisUnit.getFloorIndex() + 1) + sm.floorplateCostBase;
+			float unitCost = baseCost * unitArea;
+									
 			if (unitType != null) {
 				
-				int visibilityMultiplier = 1;
-				
-				float baseCost = floorplateCostFloorMultiplier * (analysisUnit.getFloorIndex() + 1) + floorplateCostBase;
-					
-				loop:
+				float visibilityMultiplier = 0;
+				float visibilityTotal = 0;
+							
 				for (Point3D viewpoint : sm.getViewPoints()) {
 					for (Point3D analysisPoint : analysisUnit.getAnalysisPoints(false)) {
 						if(!rt.obstructed(rt.createRay(analysisPoint, viewpoint))) {
 							visibilityMultiplier++;
-							continue loop;
 						}
+						visibilityTotal++;
 					}
 				}
-				
-				float unitArea = sm.unitAreas.get(unitType);  
+									
 				float unitValue = sm.unitValues.get(unitType) * unitArea;
-				float unitCost = baseCost * unitArea;
 				float unitCap = sm.unitCaps.containsKey(unitType) ? sm.unitCaps.get(unitType) : sm.unitCaps.get(null);
-								
-				unitValue += unitValue * unitPremiumFloorMultiplier * (analysisUnit.getFloorIndex()+1) * visibilityMultiplier;
+					
+				float unitFloorPremium = unitValue * sm.unitPremiumFloorMultiplier * (analysisUnit.getFloorIndex()+1);
+				float unitVisibilityPremium =  visibilityTotal != 0 ? unitValue * (visibilityMultiplier / visibilityTotal) : 0;
 				
+				unitValue += unitFloorPremium + unitVisibilityPremium;
+			
 				if (unitValue > unitCap) {
 					unitValue = unitCap;
 				}
+								
+				analysisUnit.addAttribute("unitValue", unitValue);
+				analysisUnit.addAttribute("unitVisibility", visibilityMultiplier);
 				
-				analysisUnit.cost = unitCost;
-				analysisUnit.value = unitValue;
-				analysisUnit.visibility = visibilityMultiplier;
-			}
+				floorCost += unitCost;
+				floorValue += unitValue;
+			} 
+		}
+				
+		for (AnalysisUnit analysisUnit: analysisFloor.getAnalysisUnits()) {
+			
+			analysisUnit.addAttribute("floorCost", floorCost);
+			analysisUnit.addAttribute("floorValue", floorValue);
+			analysisUnit.addAttribute("floorDelta", floorValue - floorCost);
+			
+			analysisFloor.addAttribute("floorCost", floorCost);
+			analysisFloor.addAttribute("floorValue", floorValue);
+			analysisFloor.addAttribute("floorDelta", floorValue - floorCost);
 		}
 	}
 			
-	public float evaluateStackValue(Point3D footprint) {
+	public float evaluateStackDelta(Point3D footprint) {
 		
 		float value = 0;
 				
 		for (AnalysisFloor analysisFloor: analysis.get(footprint)) {
-			value += analysisFloor.getValue();
+			value += analysisFloor.getAttribute("floorDelta");
 		}
 				
 		return value;
 	}
 			
-	public float evaluateTotalValue() {
+	public float evaluateTotalDelta() {
 				
 		float value = 0;
 		
 		for (Point3D footprint : sm.getFootprints()) {
-			value += evaluateStackValue(footprint);
+			value += evaluateStackDelta(footprint);
 		}
 		
 		return value;
@@ -178,7 +143,7 @@ public class StackEvaluator {
 		return area;
 	}
 	
-	public int evaluateTotalDelta() {
+	public int evalutatetotalUnitMix() {
 		
 		int delta = 0;
 		
@@ -230,10 +195,10 @@ public class StackEvaluator {
 	
 	private boolean isPushFloorValid(Point3D from , Point3D to) {
 		
-		float heightMax =  maxHeight;
+		float heightMax =  sm.maxHeight;
 		float heightTo = sm.floorToCeilingHeight * (sm.getStack(to).size() + 1);
 		
-		float areaMax = maxArea;
+		float areaMax = sm.maxArea;
 		float areaFrom = from == null ? 0 : sm.getFootprintArea(from);
 		float areaTo = to == null ? 0 : sm.getFootprintArea(to);	
 		float areaTotal = evaluateTotalArea() - areaFrom + areaTo;
@@ -254,29 +219,19 @@ public class StackEvaluator {
 	
 	private void setAnalysisStacks() {
 		
-		Mesh3D analysisMesh = new FVMesh.D3();
-		
-		analysis.clear();
 		rt.clearMeshes();
 		
-		for (Point3D footprint : sm.getFootprints()) {
-			
-			Stack<AnalysisFloor> analysisStack = StackAnalysis.getAnalysisStack(sm, footprint, false);
-								
-			for (AnalysisFloor analysisFloor : analysisStack) {
+		Mesh3D analysisMesh = new FVMesh.D3();
+		Map<Point3D, Stack<AnalysisFloor>> analysisStacks = StackAnalysis.getAnalysisStacks(sm);
+		
+		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisStack : analysisStacks.entrySet()) {
+											
+			for (AnalysisFloor analysisFloor : analysisStack.getValue()) {
 				for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
-					if (analysisUnit.getType() != null) {
+					if (analysisUnit.getUnitType() != null) {
 						new MeshOperators().joinMeshes(analysisMesh, analysisUnit.getAnalysisMesh(false));
 					}		
 				}
-			}
-			
-			analysis.put(footprint, analysisStack);
-			
-			try {
-				Thread.sleep(sleep);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
 			}
 		}
 		
@@ -286,11 +241,13 @@ public class StackEvaluator {
 		
 		rt.addTriangleMesh(analysisMesh.toString(), analysisMesh);
 		
-		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysis.entrySet()) {
+		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysisStacks.entrySet()) {
 			for (AnalysisFloor analysisFloor : analysisEntry.getValue()) {
-				evaluateFloorValue(analysisFloor);
+				evaluateFloor(analysisFloor);
 			}
 		}
+		
+		analysis = analysisStacks;
 	}
 			
 	private String swapUnitType(String footprintType, String floorplateType) {
@@ -300,10 +257,14 @@ public class StackEvaluator {
 		
 		loop:
 		for (String type : floorplateTypes) {
-						
+			
+			if (type == floorplateType) {
+				continue loop;
+			}
+			
 			for (String unitType : sm.getUnitTypes(footprintType, type)) {
 				
-				if (sm.unitCounts.get(unitType) - evaluateTotalUnitCount(unitType) < 0) {
+				if (sm.unitCounts.get(unitType) - evaluateTotalUnitCount(unitType) <= 0) {
 					continue loop;
 				}
 			}
@@ -319,8 +280,6 @@ public class StackEvaluator {
 	}
 	
 	private void sortStackFloors() {
-		
-		setAnalysisStacks();
 				
 		for (Point3D footprint : sm.getFootprints()) {
 		
@@ -337,24 +296,23 @@ public class StackEvaluator {
 						 sAnalysisFloorClone.setFloorIndex(t);
 						 tAnalysisFloorClone.setFloorIndex(s);
 						 
-						 evaluateFloorValue(sAnalysisFloorClone);
-						 evaluateFloorValue(tAnalysisFloorClone);
+						 evaluateFloor(sAnalysisFloorClone);
+						 evaluateFloor(tAnalysisFloorClone);
 						 
-						 float vc = sAnalysisFloor.getDelta() + tAnalysisFloor.getDelta();
-						 float vt = sAnalysisFloorClone.getDelta() + tAnalysisFloorClone.getDelta();
-						
-						if (vc < vt) {
-							sm.swapFloors(footprint, s, t);
+						 float vc = sAnalysisFloor.getAttribute("floorDelta") + tAnalysisFloor.getAttribute("floorDelta");
+						 float vt = sAnalysisFloorClone.getAttribute("floorDelta") + tAnalysisFloorClone.getAttribute("floorDelta");
+												 
+						 if (vc < vt) {
+							 sm.swapFloors(footprint, s, t);
 														
-							analysis.get(footprint).set(s, tAnalysisFloorClone);
-							analysis.get(footprint).set(t, sAnalysisFloorClone);
+							 analysis.get(footprint).set(s, tAnalysisFloorClone);
+							 analysis.get(footprint).set(t, sAnalysisFloorClone);
 							
-							try {
-								Thread.sleep(sleep);
-							} catch (InterruptedException e) {
-								e.printStackTrace();
-							}
-							
+							 try {
+								 Thread.sleep(sleep);
+							 } catch (InterruptedException e) {
+								 e.printStackTrace();
+							 }	
 						}
 					}
 				}
@@ -364,47 +322,37 @@ public class StackEvaluator {
 		
 	private void mutateStackFloors() {
 		
-		List<int[]> indexes = new ArrayList<>();
+		if (sm.getPointers().isEmpty()) {
+			return;
+		}
+			
+		for (int i = new Random().nextInt(sm.getPointers().size()); i>=0;) {
+						
+			int[] pointer  = sm.getPointers().get(new Random().nextInt(sm.getPointers().size()));
+			
+			Point3D footprint = sm.getFootprints().get(pointer[0]);
+			
+			if (sm.getStack(footprint).get(pointer[1]) != null || value.get() == -Float.MAX_VALUE) {
 				
-		for (int i = new Random().nextInt(sm.getPointers().size()); i>=0 ; i--) {
-			
-			List<int[]> pointers = sm.getPointers();
-			Collections.shuffle(pointers, new Random());
-			
-			int[] pull = pointers.get(new Random().nextInt(pointers.size()));
-			int[] push = pointers.get(new Random().nextInt(pointers.size()));
-			
-			if (!indexes.contains(push) && !indexes.contains(pull) && push[0] != pull[0]) {
+				float option = new Random().nextFloat();
 				
-				if (isPushFloorValid(sm.getFootprints().get(push[0]), sm.getFootprints().get(pull[0]))) {
-
-					sm.removeFloor(sm.getFootprints().get(push[0]), push[1]);
-					sm.pushFloor(sm.getFootprints().get(pull[0]), null);
-					
-					try {
-						Thread.sleep(sleep);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-					
-					indexes.add(push);
-					indexes.add(pull);
-					
-					i--;
+				if (option < 0.5) {
+					sm.pushFloor(footprint, null);
+				} else if (0.5 <= option ) {
+					sm.removeFloor(footprint, pointer[1]);
 				}
+				
+				i--;
 			}
 		}
-		
-		for (int[] pointer : sm.getPointers()) {
-			if (sm.getStack(sm.getFootprints().get(pointer[0])).get(pointer[1]) == null) {
-				sm.getStack(sm.getFootprints().get(pointer[0])).set(pointer[1], 
-						swapUnitType(sm.getFootprintType(sm.getFootprints().get(pointer[0])), null));
 				
-				try {
-					Thread.sleep(sleep);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+		for (int[] pointer : sm.getPointers()) {
+			
+			Point3D footprint = sm.getFootprints().get(pointer[0]);
+			
+			if (sm.getStack(footprint).get(pointer[1]) == null) {
+				sm.getStack(footprint).set(pointer[1], 
+						swapUnitType(sm.getFootprintType(footprint), null));
 			}
 		}
 		
@@ -412,24 +360,19 @@ public class StackEvaluator {
 			for (int i=sm.getStack(footprint).size()-1; i>=0; i--) {
 				if (sm.getStack(footprint).get(i) == null) {
 					sm.removeFloor(footprint, i);
-					
-					try {
-						Thread.sleep(sleep);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
 				}
 			}
 		}
-			
+		
+		setAnalysisStacks();
 		sortStackFloors();
 		
-		Integer hash = sm.getStackHash();
+		String hashString = sm.getHashString();
 		
-		if (hashes.contains(hash)) {
+		if (hashes.contains(hashString)) {
 			mutateStackFloors();			
 		} else {
-			hashes.add(hash);
+			hashes.add(hashString);
 		}
 	}
 			
@@ -438,7 +381,7 @@ public class StackEvaluator {
 		this.sm = sm;
 		this.hashes = new HashSet<>();
 		this.counts = new ConcurrentHashMap<>();
-		this.value = new SimpleFloatProperty(0);
+		this.value = new SimpleFloatProperty(-Float.MAX_VALUE);
 		this.analysis = new ConcurrentHashMap<>();
 		
 		sm.reset();		
@@ -449,12 +392,21 @@ public class StackEvaluator {
 			
 			valid = false;
 			
-			for (Point3D footprint :  sm.getFootprints()) {	
-				if (isPushFloorValid(null, footprint)) {
-					sm.pushFloor(footprint, null);
+			for (Point3D footprint : sm.getFootprints()) {
+				
+				String floorplateType = swapUnitType(sm.getFootprintType(footprint), null);
+				
+				if (floorplateType != null) {
+					sm.pushFloor(footprint, floorplateType);
 					
 					valid = true;
-				}			
+				}
+			}
+		}
+		
+		for (Point3D footprint : sm.getFootprints()) {
+			for (int i = 0; i<sm.getStack(footprint).size(); i++) {
+				sm.getStack(footprint).set(i, null);
 			}
 		}
 		
@@ -465,7 +417,11 @@ public class StackEvaluator {
 	
 	private void update() {
 
-		this.value.set(evaluateTotalValue());
+		float value = evaluateTotalDelta();
+		float delta = value - this.value.get();
+		
+		this.value.set(value);
+		this.delta.set(delta);
 		
 		for (String unitType : sm.getUnitTypes()) {
 			this.counts.put(unitType, evaluateTotalUnitCount(unitType));
@@ -478,77 +434,7 @@ public class StackEvaluator {
 		
 		evaluate.set(false);
 	}
-	
-//	public void _start() {
-//		
-//		evaluate.set(true);;		
-//		
-//		SortedMap<Float, Map<Point3D, Stack<String>>> elite = new TreeMap<>();
-//		
-//		int pool = 50;
-//		int cross = 10;
-//				
-//		elite.put(evaluateTotalValue(), sm.saveState());
-//		
-//		do {
-//						
-//			SortedMap<Float, Map<Point3D, Stack<String>>> front = new TreeMap<>(elite);
-//			
-//			elite.clear();
-//									
-//			for (Map.Entry<Float, Map<Point3D, Stack<String>>> f : front.entrySet()) {
-//				
-//				sm.restoreState(f.getValue());
-//												
-//				boolean flag = false;
-//								
-//				if (f.getKey() != 0) {			
-//					update();
-//				}
-//																
-//				for (int p = pool ; p > 0 ; p--) {
-//						
-//					sm.saveStacks();
-//					
-//					mutateStackFloors();							
-//											
-//					float value = evaluateTotalValue();
-//										
-//					if (value > f.getKey()) {											
-//						elite.put(value, sm.saveState());
-//						flag = true;	
-//					}				
-//
-//					try {
-//						Thread.sleep(sleep);
-//					} catch (InterruptedException e) {
-//						e.printStackTrace();
-//					}
-//					
-//					sm.restoreStacks();	
-//				}
-//								
-//				if (!flag) {					
-//					elite.put(f.getKey(), f.getValue());
-//				}
-//			}
-//			
-//			List<Float> values = new ArrayList<>(elite.keySet());
-//			Collections.reverse(values);
-//			
-//			for (int i=values.size()-1; i>=cross; i--) {
-//				elite.remove(values.get(i));
-//			}
-//					
-//		} while(evaluate.get() == true);
-//		
-//		sm.restoreState(elite.get(elite.lastKey()));
-//		
-//		update();
-//										
-//		print();
-//	}
-		
+			
 	public void start() {
 		
 		evaluate.set(true);;		
@@ -557,21 +443,21 @@ public class StackEvaluator {
 		
 		int pool = 100;
 				
-		elite.put(0f, sm.saveState());
+		elite.put(-Float.MAX_VALUE, sm.saveState());
 		
 		do {
 						
 			SortedMap<Float, Map<Point3D, Stack<String>>> front = new TreeMap<>(elite);
 			
-			float mu  = front.firstKey(); //(front.firstKey() + front.lastKey()) / 2;
-
+			float mu  = (front.firstKey() + front.lastKey()) / 2;
+			
 			elite.clear();
 									
 			for (Map.Entry<Float, Map<Point3D, Stack<String>>> f : front.entrySet()) {
 				
 				sm.restoreState(f.getValue());
 
-				if (f.getKey() > mu) elite.put(f.getKey(), f.getValue());
+				if (f.getKey() >= mu) elite.put(f.getKey(), f.getValue());
 						
 				int offspring = (int) pool / front.size();
 																				
@@ -581,12 +467,11 @@ public class StackEvaluator {
 										
 					mutateStackFloors();							
 											
-					float value = evaluateTotalValue();
+					float delta = evaluateTotalDelta();
 					
-					if (value > mu) {											
-						elite.put(value, sm.saveState());	
-						
-						update();
+					if (delta >= mu) {											
+						elite.put(delta, sm.saveState());						
+						if (f.getKey() != -Float.MAX_VALUE) update();
 					}				
 
 					try {
@@ -618,13 +503,14 @@ public class StackEvaluator {
 		
 		System.out.println();
 		System.out.println();
-		System.out.println("total area: " + evaluateTotalArea() + " / " + maxArea);
-		System.out.println("total value: " + evaluateTotalValue());
+		System.out.println("total area: " + evaluateTotalArea() + " / " + sm.maxArea);
 		System.out.println("total delta: " + evaluateTotalDelta());
+		System.out.println("total mix: " + evalutatetotalUnitMix());
 		System.out.println();
 		for (String unitType : sm.getUnitTypes()) {
 			System.out.println(unitType + " : " + evaluateTotalUnitCount(unitType) + " / " + sm.unitCounts.get(unitType));
 		}
+		System.out.println();
 		for (Point3D footprint : sm.getFootprints()) {
 			System.out.println(sm.getFootprintType(footprint) + " height : " + sm.getStack(footprint).size() * sm.floorToCeilingHeight);
 		}
