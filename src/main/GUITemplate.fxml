@@ -21,7 +21,8 @@
                         <MenuItem fx:id="importGeometryMenuItem" mnemonicParsing="false" text="Import Geometry (.dxf)..."/>
                         <MenuItem fx:id="importUnitMixMenuItem" mnemonicParsing="false" text="Import Unit Mix (.csv)..."/>
                         <SeparatorMenuItem mnemonicParsing="false" />
-                        <MenuItem fx:id="exportUnitDataMenuItem" mnemonicParsing="false" text="Export Unit Data (.csv)..."/>
+                        <MenuItem fx:id="exportUnitDataMenuItem" mnemonicParsing="false" text="Export Unit Data"/>
+                        <MenuItem fx:id="exportImageMenuItem" mnemonicParsing="false" text="Export Image"/>
                   </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Run">
@@ -41,7 +42,6 @@
 		<children>
 			<VBox>
 				<children>
-					<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="true" text="Unit Mix" />
 					<TitledPane fx:id="statisticsTitledPane" animated="false" expanded="true" text="Statistics" />
 					<TitledPane fx:id="legendTitledPane" animated="false" expanded="true" text="Legend" />
 				</children>
@@ -52,9 +52,9 @@
 	<bottom>
 	<TitledPane text="Generations" animated="false">	
 		<content>
-			<AnchorPane fx:id="chartAnchorPane" >
+			<VBox fx:id="chartVBox" >
 				<padding><Insets top="0" right="0" bottom="0" left="0"/></padding>
-			</AnchorPane>
+			</VBox>
 		</content>
 	</TitledPane>
 	

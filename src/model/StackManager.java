@@ -15,6 +15,8 @@ import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMesh;
 import cdr.mesh.toolkit.operators.MeshOperators;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleFloatProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import lucy.MoreMeshPrimitives;
 
 public class StackManager {
@@ -71,6 +73,8 @@ public class StackManager {
 	
 	Map<Polygon3D, String> unitTypes = new HashMap<>();
 	
+	Map<Polygon3D, Point3D> unitTagPoints = new HashMap<>();
+	
 	Map<Polygon3D, List<Point3D>> unitAnalysisPoints = new HashMap<>();
 	
 	Map<Polygon3D, Mesh3D> unitAnalysisMeshes = new HashMap<>();
@@ -93,7 +97,7 @@ public class StackManager {
 	 * Save
 	 */
 		
-	private SimpleBooleanProperty flag = new SimpleBooleanProperty(false);
+	private SimpleIntegerProperty flag = new SimpleIntegerProperty(0);
 		
 	private List<int[]> pointers = new ArrayList<>();
 		
@@ -108,23 +112,24 @@ public class StackManager {
 	
 	public void reset() {
 		
-		restore = new Stack<>();
+		//this.flag = new SimpleIntegerProperty(0);
 		
-		pointers = new ArrayList<>();
+		this.restore = new Stack<>();
+		
+		this.pointers = new ArrayList<>();
 		
 		for (Point3D footprint : this.getFootprints()) {
 			this.getStack(footprint).clear();
 		}
 		
 		this.saveStacks();
-
 	}
 	
 	public void flag() {
-		this.flag.set(!this.flag.get());
+		this.flag.set(this.flag.get()+1);
 	}
 	
-	public SimpleBooleanProperty getFlag() {
+	public SimpleIntegerProperty getFlag() {
 		return this.flag;
 	}
 	
@@ -162,7 +167,7 @@ public class StackManager {
 		return this.footprintTypes.get(footprint);
 	}
 	
-	public float getFootprintArea(Point3D footprint) { // TODO - replace this with a polyline
+	public float getFootprintArea(Point3D footprint) { // TODO - replace this with a polyline?
 		
 		float area = 0f;
 		
@@ -171,9 +176,20 @@ public class StackManager {
 		Point3D floorplate = this.getFloorplate(footprintType, floorplateType);	
 		
 		for (Polygon3D unit : this.getUnits(floorplate)) {
-			area += unit.area();
+			area += this.unitAreas.get(unit);
 		}
 		
+		return area;
+	}
+	
+	public float getStackArea() {
+		
+		float area = 0f;
+		
+		for (Point3D footprint : this.footprints) {
+			area += this.getFootprintArea(footprint) * this.getStack(footprint).size();
+		}
+						
 		return area;
 	}
 	
@@ -198,6 +214,7 @@ public class StackManager {
 			for (Text3D unitType : unitTypes) {
 				if (unit.isInside(unitType.getAnchor())) {
 					this.unitTypes.put(unit, unitType.getString().trim());
+					this.unitTagPoints.put(unit, unitType.getAnchor());
 				}
 			}
 			
@@ -313,8 +330,12 @@ public class StackManager {
 		return this.unitAreas.get(unit);
 	}
 		
-	public String getUnitType(Polygon3D unit) {	
+	public String getUnitType(Polygon3D unit) {		
 		return this.unitTypes.get(unit);
+	}
+	
+	public Point3D getUnitTagPoint(Polygon3D unit) {
+		return this.unitTagPoints.get(unit);
 	}
 	
 	public List<Point3D> getUnitAnalysisPoints(Polygon3D unit) {
@@ -329,7 +350,33 @@ public class StackManager {
 		
 		return analysisMesh;
 	}
-	
+			
+	public int getUnitCount(String unitType) {
+		
+		int count = 0;
+		
+		for (Point3D footprint : this.footprints) {
+			
+			String footprintType = this.getFootprintType(footprint);
+			
+			for (String floorplateType : this.getStack(footprint)) {	
+				
+				Point3D floorplate = this.getFloorplate(footprintType, floorplateType);
+				List<Polygon3D> units = this.getUnits(floorplate);
+				
+				if (units != null) {
+					for (String type : this.getUnitTypes(footprintType, floorplateType)) {
+						if (type.equals(unitType)) {
+							count++;
+						}
+					}
+				}
+			}
+		}
+						
+		return count;
+	}
+		
 	public String getHashString() {
 		
 		String hashString = "";
