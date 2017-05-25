@@ -2,7 +2,9 @@ package chart;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.Stack;
+import java.util.TreeMap;
 
 import cdr.geometry.primitives.Point3D;
 import javafx.application.Platform;
@@ -15,6 +17,7 @@ import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.StackedBarChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.chart.XYChart.Data;
+import model.StackAnalysis;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackEvaluator;
 import model.StackManager;
@@ -23,30 +26,47 @@ public class StackChart {
 	
 	private final StackManager sm;
 	private final StackEvaluator se;
+		
+	/*
+	 * =========================================================
+	 * VALUE CHART
+	 * =========================================================
+	 */
 	
 	private StackedBarChart<String, Number> valueChart;
 	private CategoryAxis valueGenerationAxis;
 	private NumberAxis valueValueAxis;
 	private XYChart.Series<String, Number> valueSeries;
 	
+	/*
+	 * =========================================================
+	 * DISTRIBUTION CHART
+	 * =========================================================
+	 */
+	
 	private StackedBarChart<String, Number> distributionChart;
 	private CategoryAxis distributionGenerationAxis;
 	private NumberAxis distributionValueAxis;
 	private Map<Point3D, XYChart.Series<String, Number>> distributionSeries;
 		
+	/*
+	 * =========================================================
+	 * CHART PROPERTIES
+	 * =========================================================
+	 */
+	
+	private SortedMap<Integer, String> generations = new TreeMap<>();
+	
 	private SimpleFloatProperty minValue = new SimpleFloatProperty(Float.MAX_VALUE);
 	private SimpleFloatProperty maxValue = new SimpleFloatProperty(-Float.MAX_VALUE);
 	
+
 	public StackChart(StackManager sm, StackEvaluator se) {
 		
 		this.sm = sm;
 		this.se = se;
 		
-		/*
-		 * =========================================================
-		 * DISTRIBUTION CHART
-		 * =========================================================
-		 */
+		//---------------------------
 		
 		this.distributionValueAxis = new NumberAxis();
 		this.distributionValueAxis.setLabel("Stack Distribution");
@@ -60,11 +80,7 @@ public class StackChart {
 			
 		this.distributionSeries = new HashMap<>();
 		
-		/*
-		 * =========================================================
-		 * VALUE CHART
-		 * =========================================================
-		 */
+		//---------------------------
 
 		this.valueValueAxis = new NumberAxis();
 		this.valueValueAxis.setLabel("Value Increase");
@@ -106,22 +122,8 @@ public class StackChart {
 				Platform.runLater(new Runnable() {
 					
 					@Override
-					public void run() {		
-						
-						Map<Point3D, Stack<AnalysisFloor>> analysisStacks = StackChart.this.se.getAnalysisStacks();
-						Map<Point3D, Float> values = new HashMap<>();
-												
-						for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysisStacks.entrySet()) {	
-							
-							if (!distributionSeries.containsKey(analysisEntry.getKey())) {
-								distributionSeries.put(analysisEntry.getKey(), new XYChart.Series<>());
-								distributionChart.getData().add(distributionSeries.get(analysisEntry.getKey()));
-							}
-							
-							values.put(analysisEntry.getKey(), StackEvaluator.evaluateStack(analysisEntry.getValue()));
-						}
-												
-						addValues(values, (int) newValue);
+					public void run() {								
+						addValues(StackChart.this.se.getAnalysisStacks(), (int) newValue);
 					}
 				});
 			}
@@ -151,14 +153,29 @@ public class StackChart {
 		this.valueValueAxis.setLowerBound(0);
 		this.valueValueAxis.setUpperBound(1);
 		
+		this.generations = new TreeMap<>();
+		
 		this.minValue.set(Float.MAX_VALUE);
 		this.maxValue.set(-Float.MAX_VALUE);
 	}
 	
-	public void addValues(Map<Point3D, Float> values, int generation) {
-				
+	public void addValues(Map<Point3D, Stack<AnalysisFloor>> analysisStacks, int generation) {
+		
 		float value = 0;
-		for (Float v : values.values()) value += v;
+		
+		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysisStacks.entrySet()) {	
+			
+			if (!distributionSeries.containsKey(analysisEntry.getKey())) {
+				distributionSeries.put(analysisEntry.getKey(), new XYChart.Series<>());
+				distributionChart.getData().add(distributionSeries.get(analysisEntry.getKey()));
+			}
+			
+			float v = StackEvaluator.evaluateStack(analysisEntry.getValue());
+			this.distributionSeries.get(analysisEntry.getKey()).getData()
+				.add(new Data<String, Number>(Integer.toString(generation), v));
+
+			value += v;
+		}
 				
 		if (value < minValue.get()) {
 			this.minValue.set(value);
@@ -175,12 +192,6 @@ public class StackChart {
 		this.valueGenerationAxis.getCategories().add(Integer.toString(generation));
 		
 		this.valueSeries.getData().add(new Data<String, Number>(Integer.toString(generation), value));
-				
-		for (Map.Entry<Point3D, Float> data : values.entrySet()) {	
-			
-			float v = data.getValue();
-			
-			this.distributionSeries.get(data.getKey()).getData().add(new Data<String, Number>(Integer.toString(generation), v));
-		}
+		this.generations.put(generation, StackAnalysis.hashAnalysisStack(analysisStacks));
 	}
 }

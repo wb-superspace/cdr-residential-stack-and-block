@@ -34,6 +34,10 @@ import cdr.joglFramework.snapshot.CombinedSnapshot;
 import cdr.mesh.datastructure.Face;
 import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMeshFactory;
+import cdr.mesh.renderer.MeshRenderer3D;
+import cdr.mesh.renderer.MeshRenderer3DFlatShaded;
+import cdr.mesh.renderer.MeshRenderer3DOutline;
+import cdr.mesh.renderer.MeshRenderer3DSmoothShaded;
 import cdr.mesh.toolkit.operators.MeshOperators;
 import chart.StackChart;
 import fileio.CsvReader;
@@ -43,7 +47,9 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.util.Callback;
 import model.StackAnalysis;
+import model.StackAnalysis.AnalysisAttribute;
 import model.StackAnalysis.AnalysisFloor;
+import model.StackAnalysis.AnalysisType;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 import model.StackEvaluator;
 import model.StackManager;
@@ -52,13 +58,13 @@ import model.StackManager;
 public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 
 	GeometryRenderer gr = new GeometryRenderer();
+	MeshRenderer3DOutline mr = new MeshRenderer3DOutline();
+	GLUT glut = new GLUT();
+	GLFramework f;
+	
 	StackManager sm;
 	StackEvaluator se;
-	StackChart sc;
-	
-	GLUT glut = new GLUT();
-	
-	GLFramework f;
+	StackChart sc;	
 	
 	/*
 	 * =========================================================
@@ -68,7 +74,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	String[] renderAttributes = new String[] {
 			"unitType", 
-			"unitVisibility", 
+			"unitVisibilityPremium",
+			"unitFloorPremium",
 			"unitValue",
 			"floorCost",
 			"floorValue",
@@ -137,7 +144,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 			
 			String attribute = renderAttributes[renderAttribute.get()];
 			
-			float[] bounds = StackAnalysis.getBounds(analysisStacks, attribute);
+			AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttribute(analysisStacks, attribute, AnalysisType.UNIT);
 			
 			for (Point3D footprint : analysisStacks.keySet()) {
 				
@@ -149,11 +156,23 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							continue;
 						}
 						
-						List<Polygon3D> unitFaces = new ArrayList<>();
+						String color = sm.unitColors.get(analysisUnit.getUnitType());
+						HEXColour colour = new HEXColour(color);
+						gl.glColor3f(colour.red(), colour.green(), colour.blue());
 						
-						if (renderExploded) {
+						HSVColour c = new HSVColour() ;
+						
+						if (attribute != "unitType") {
 							
-							unitFaces.add(analysisUnit.getAnalysisGeometry(renderExploded));
+							float value = analysisAttribute.getMappedValue(analysisUnit.getAttribute(attribute));						
+							c.setHSV((1-(value)) * 0.6f, 1f, 1f) ;		
+							gl.glColor3f(c.red(), c.green(), c.blue());
+							
+						}
+															
+						if (renderExploded) {
+														
+							gr.renderPolygon3DFill(gl, analysisUnit.getAnalysisGeometry(renderExploded));
 							
 							Point3D tagPoint = analysisUnit.getTagPoint(renderExploded);
 							
@@ -177,51 +196,26 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						} else {
 							
 							Mesh3D m = analysisUnit.getAnalysisMesh(renderExploded);
+
+							mr.renderFill(gl, m);
 							
-							for(Face face : m.iterableFaces()) {	
-								unitFaces.add(m.getPolygon(face)); 					
-							}
+							gl.glLineWidth(0.01f);
+							gl.glColor3f(0, 0, 0);
+														
+							mr.renderCornerEdges(gl, m, 0.1f);
 						}
-												
-						String color = sm.unitColors.get(analysisUnit.getUnitType());
-						HEXColour colour = new HEXColour(color);
-						gl.glColor3f(colour.red(), colour.green(), colour.blue());
-						
-						HSVColour c = new HSVColour() ;
-						
-						if (attribute != "unitType") {
-							
-							float value = (analysisUnit.getAttribute(attribute) - bounds[0]) / (bounds[1] - bounds[0]);							
-							c.setHSV((1-(value)) * 0.6f, 1f, 1f) ;		
-							gl.glColor3f(c.red(), c.green(), c.blue());
-							
-						}
-												
-						gr.renderPolygons3DFill(gl, unitFaces);
-						
-						gl.glLineWidth(0.01f);
-						gl.glColor3f(0, 0, 0);
-						
-						gr.renderPolygons3DLines(gl, unitFaces);
 					}					
 				}
 			}
 			
-			for (Mesh3D contextMesh : sm.getContext()) {
+			for (Mesh3D m : sm.getContext()) {
 				
-				List<Polygon3D> contextFaces = new ArrayList<>();
-				
-				for(Face face : contextMesh.iterableFaces()) {
-					
-					contextFaces.add(contextMesh.getPolygon(face)); 					
-				}
-
 				gl.glColor3f(0.7f, 0.7f, 0.7f);
-				gr.renderPolygons3DFill(gl, contextFaces);
+				mr.renderFill(gl, m);
 				
 				gl.glLineWidth(0.1f);
 				gl.glColor3f(0, 0, 0);			
-				gr.renderPolygons3DLines(gl, contextFaces);
+				mr.renderCornerEdges(gl, m, 1f);
 			}
 		}
 	}

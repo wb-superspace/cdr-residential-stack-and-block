@@ -4,14 +4,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.Stack;
+import java.util.TreeMap;
 
+import org.apache.commons.math3.ode.FirstOrderConverter;
+
+import cdr.colour.HSVColour;
 import cdr.geometry.primitives.ArrayPoint3D;
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Vector3D;
 import cdr.mesh.datastructure.Mesh3D;
+import javafx.legend.BarChartItem;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 
@@ -19,43 +25,55 @@ public class StackAnalysis {
 
 	private static float D = 3;
 	
-	/*
-	 * =========================================================
-	 * BOUNDS
-	 * =========================================================
-	 */
-	
-	public static float[] getBounds( Map<Point3D, Stack<AnalysisFloor>> analysisStacks, String attribute) {
-		
-		float min = Float.MAX_VALUE;
-		float max = -Float.MAX_VALUE;
-		
-		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
-		
-			for (AnalysisFloor analysisFloor: analysisStack) {
-				for (AnalysisUnit analysisUnit: analysisFloor.getAnalysisUnits()) {
-					
-					if (analysisUnit.getUnitType() != null) {
-						
-						float value = analysisUnit.getAttribute(attribute);
-												
-						if (value > max) max = value;
-						if (value < min) min = value;
-					}	
-				}
-			}
-		}
-		
-		return new float[] {min, max};
+	public enum AnalysisType  {
+		ATTRIBUTE,
+		UNIT,
+		FLOOR,
 	}
 	
 	/*
 	 * =========================================================
-	 * METHODS
+	 * STATIC METHODS
 	 * =========================================================
 	 */
+	
+	public static AnalysisAttribute getAnalysisAttribute(Map<Point3D, Stack<AnalysisFloor>> analysisStacks, String attribute, AnalysisType analysisType) {
 		
-	public static Stack<AnalysisFloor> getAnalysisStack(StackManager sm, Point3D footprint) {
+		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
+		
+		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+			for (AnalysisFloor analysisFloor: analysisStack) {
+				
+				if (analysisType == AnalysisType.FLOOR) {
+					analysisAttribute.addValue(analysisFloor.getAttribute(attribute));
+				
+				} else if (analysisType == AnalysisType.UNIT) {
+					for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
+						if (analysisUnit.getUnitType() != null) {
+							analysisAttribute.addValue(analysisUnit.getAttribute(attribute));
+						}
+					}
+				}
+			}
+		}
+		
+		return analysisAttribute;
+	}
+			
+	public static String hashAnalysisStack( Map<Point3D, Stack<AnalysisFloor>> analysisStacks) {
+		
+		String hashString = "";
+		
+		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+			for (AnalysisFloor analysisFloor: analysisStack) {
+				hashString += analysisFloor.getHashString();
+			}
+		}
+		
+		return hashString;
+	}
+		
+	private static Stack<AnalysisFloor> getAnalysisStack(StackManager sm, Point3D footprint) {
 		
 		StackAnalysis stackAnalysis = new StackAnalysis();
 		Stack<AnalysisFloor> analysisStack = new Stack<>();
@@ -78,6 +96,93 @@ public class StackAnalysis {
 		}
 		
 		return analysisStacks;
+	}
+		
+	
+	/*
+	 * =========================================================
+	 * ATTRIBUTE
+	 * =========================================================
+	 */
+	
+	public class AnalysisAttribute {
+		
+		private String attribute;
+		
+		private Float[] bounds;
+		private List<Float> values;
+		
+		public AnalysisAttribute(String attribute) {
+			
+			this.attribute = attribute;
+			this.bounds = new Float[]{Float.MAX_VALUE, -Float.MAX_VALUE};
+			this.values = new ArrayList<>();
+		}
+		
+		public String getAttribute() {
+			return this.attribute;
+		}
+		
+		public Float[] getBounds() {
+			return this.bounds;
+		}
+		
+		public List<Float> getValues() {
+			return this.values;
+		}
+		
+		public void addValue(Float value) {
+			
+			if (value < bounds[0]) bounds[0] = value;
+			if (value > bounds[1]) bounds[1] = value; 
+			
+			this.values.add(value);
+		}
+		
+		public void setValues(List<Float> values) {
+			
+			this.bounds = new Float[]{Float.MAX_VALUE, -Float.MAX_VALUE};
+			this.values = new ArrayList<>();
+			
+			for (Float value : values) {
+				this.addValue(value);
+			}
+		}
+		
+		public float getMappedValue(float value) {
+			return (value - bounds[0]) / (bounds[1] - bounds[0]);	
+		}
+		
+		public Map<Float, List<Float>> getBinValues(int numBins) {
+			
+			SortedMap<Float, List<Float>> bins = new TreeMap<>();
+			
+			if (this.bounds[1] != this.bounds[0] && this.bounds[1] != 0) {
+				
+				for (float i = this.bounds[0]; i <= this.bounds[1]; i+= (this.bounds[1]-this.bounds[0]) / numBins) {
+															
+					bins.put(i, new ArrayList<>());
+				}
+				
+				for (int i = 0; i < this.values.size(); i++) {
+					
+					List<Float> curr = null;
+					
+					for (Map.Entry<Float, List<Float>> bin : bins.entrySet()) {
+						
+						if (bin.getKey() > this.values.get(i)) break;
+						
+						curr = bin.getValue();
+					}
+					
+					if (curr != null) {
+						curr.add(this.values.get(i));
+					}	
+				}
+			}
+						
+			return bins;
+		}
 	}
 	
 	/*
@@ -207,13 +312,13 @@ public class StackAnalysis {
 			
 			List<Point3D> footprints = this.sm.getFootprints();
 							
-			String identifier = this.getFloorplateType() + "|";
+			String hashString = this.getFloorplateType() + "|";
 			
 			int floorIndex = this.floorIndex;
 			int footprintIndex = footprints.indexOf(this.footprint);
 			
-			identifier += footprintIndex + "|";
-			identifier += floorIndex + "|";
+			hashString += footprintIndex + "|";
+			hashString += floorIndex + "|";
 			
 			for (int j = 0; j<footprints.size(); j++) {
 			
@@ -228,10 +333,10 @@ public class StackAnalysis {
 					relationship = -1;
 				}
 				
-				identifier += relationship + "|";
+				hashString += relationship + "|";
 			}
 			
-			return identifier;
+			return hashString;
 		}
 				
 		/*

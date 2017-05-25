@@ -42,6 +42,7 @@
 		<children>
 			<VBox>
 				<children>
+					<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="true" text="Unit Mix" />
 					<TitledPane fx:id="statisticsTitledPane" animated="false" expanded="true" text="Statistics" />
 					<TitledPane fx:id="legendTitledPane" animated="false" expanded="true" text="Legend" />
 				</children>

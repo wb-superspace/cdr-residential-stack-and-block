@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.concurrent.ConcurrentHashMap;
+
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.LineSegment3D;
 import cdr.geometry.primitives.Point3D;
@@ -14,8 +16,6 @@ import cdr.geometry.primitives.Text3D;
 import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMesh;
 import cdr.mesh.toolkit.operators.MeshOperators;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleFloatProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import lucy.MoreMeshPrimitives;
 
@@ -29,7 +29,7 @@ public class StackManager {
 	
 	public float maxHeight = Float.MAX_VALUE; 
 	
-	public float floorplateCostBase = 125f; 							// AECOM
+	public float floorplateCostBase = 1250f; 							// AECOM
 	
 	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
 	
@@ -65,7 +65,7 @@ public class StackManager {
 	
 	Map<Point3D, String> floorplateTypes = new HashMap<>();
 	
-	Map<Point3D, List<Polygon3D>> units = new HashMap<>();
+	Map<Point3D, List<Polygon3D>> units = new HashMap<>(); 
 	
 	/*
 	 * Unit 
@@ -376,29 +376,7 @@ public class StackManager {
 						
 		return count;
 	}
-		
-	public String getHashString() {
-		
-		String hashString = "";
-		
-		for (Point3D footprint : this.getFootprints()) {
-			hashString += this.getStackHashString(footprint);
-		}
-		
-		return hashString;
-	}
-	
-	private String getStackHashString(Point3D footprint) {
-		
-		String hashString = "|" + this.getFootprintType(footprint);
-		
-		for (String floorplateType : this.getStack(footprint)) {
-			hashString += "|"+ floorplateType;
-		}
-		
-		return hashString;
-	}
-			
+					
 	public Stack<String> getStack(Point3D footprint) {
 		return this.stacks.get(footprint);
 	}
