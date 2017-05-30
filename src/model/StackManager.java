@@ -18,6 +18,7 @@ import cdr.mesh.datastructure.fvMesh.FVMesh;
 import cdr.mesh.toolkit.operators.MeshOperators;
 import javafx.beans.property.SimpleIntegerProperty;
 import lucy.MoreMeshPrimitives;
+import sun.launcher.resources.launcher;
 
 public class StackManager {
 		
@@ -33,7 +34,7 @@ public class StackManager {
 	
 	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
 	
-	public float unitPremiumFloorMultiplier = 0.022f; 					// AECOM (1.5% -> 2.2% (PH))
+	public float unitPremiumFloorMultiplier = 0.015f; 					// AECOM (1.5% -> 2.2% (PH))
 		
 	public float floorToCeilingHeight = 4f;
 	
@@ -97,27 +98,19 @@ public class StackManager {
 	 * Save
 	 */
 		
-	private SimpleIntegerProperty flag = new SimpleIntegerProperty(0);
-		
 	private List<int[]> pointers = new ArrayList<>();
 		
 	private Stack<Map<Point3D, Stack<String>>> restore = new Stack<>();
 	
 	private Map<Point3D, Stack<String>> stacks = new HashMap<>();
 	
-		
 	/*
-	 * Run
+	 * Methods
 	 */
 	
-	public void reset() {
-		
-		//this.flag = new SimpleIntegerProperty(0);
-		
+	public void clearStacks() {
 		this.restore = new Stack<>();
-		
 		this.pointers = new ArrayList<>();
-		
 		for (Point3D footprint : this.getFootprints()) {
 			this.getStack(footprint).clear();
 		}
@@ -125,14 +118,13 @@ public class StackManager {
 		this.saveStacks();
 	}
 	
-	public void flag() {
-		this.flag.set(this.flag.get()+1);
+	public void clearUnitMix() {
+		this.unitCounts = new HashMap<>();
+		this.unitColors = new HashMap<>();
+		this.unitValues = new HashMap<>();
+		this.unitCaps = new HashMap<>();
 	}
-	
-	public SimpleIntegerProperty getFlag() {
-		return this.flag;
-	}
-	
+		
 	public void point() {
 		
 		pointers.clear();	

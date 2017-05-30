@@ -20,9 +20,10 @@
                   <items>
                         <MenuItem fx:id="importGeometryMenuItem" mnemonicParsing="false" text="Import Geometry (.dxf)..."/>
                         <MenuItem fx:id="importUnitMixMenuItem" mnemonicParsing="false" text="Import Unit Mix (.csv)..."/>
+                        <MenuItem fx:id="importStackMenuItem" mnemonicParsing="false" text="Import Stack (.csv)..."/>
                         <SeparatorMenuItem mnemonicParsing="false" />
-                        <MenuItem fx:id="exportUnitDataMenuItem" mnemonicParsing="false" text="Export Unit Data"/>
-                        <MenuItem fx:id="exportImageMenuItem" mnemonicParsing="false" text="Export Image"/>
+                        <MenuItem fx:id="exportStackMenuItem" mnemonicParsing="false" text="Export Stack (.csv)"/>
+                        <MenuItem fx:id="exportImageMenuItem" mnemonicParsing="false" text="Export Image (.png)"/>
                   </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Run">
@@ -30,6 +31,15 @@
                         <MenuItem fx:id="startMenuItem" mnemonicParsing="false" text="Start" />
                         <MenuItem fx:id="stopMenuItem" mnemonicParsing="false" text="Stop" />	 
                         <MenuItem fx:id="resumeMenuItem" mnemonicParsing="false" text="Resume" />	 	                  	
+                     </items>
+                 </Menu>
+                 <Menu mnemonicParsing="false" text="Settings">
+                     <items>
+                     	<MenuItem fx:id="editUnitMixMenuItem" mnemonicParsing="false" text="Edit Unit Mix.." />
+                     	<MenuItem fx:id="editStackMenuItem" mnemonicParsing="false" text="Edit Stack..." />
+                     	<SeparatorMenuItem mnemonicParsing="false" />
+                        <MenuItem fx:id="setMaxFARMenuItem" mnemonicParsing="false" text="Set Max FAR..." />
+                        <MenuItem fx:id="setMaxHeightMenuItem" mnemonicParsing="false" text="Set Max Height..." />	  	                  	
                      </items>
                  </Menu>
               </menus>
@@ -42,22 +52,30 @@
 		<children>
 			<VBox>
 				<children>
-					<TitledPane fx:id="unitMixTitledPane" animated="false" expanded="true" text="Unit Mix" />
-					<TitledPane fx:id="statisticsTitledPane" animated="false" expanded="true" text="Statistics" />
-					<TitledPane fx:id="legendTitledPane" animated="false" expanded="true" text="Legend" />
+					<TitledPane fx:id="performanceTitledPane" animated="false" expanded="true" text="Performance" />
 				</children>
 			</VBox>
 		</children>
 	</AnchorPane>
 	</right>
 	<bottom>
-	<TitledPane text="Generations" animated="false">	
-		<content>
-			<VBox fx:id="chartVBox" >
-				<padding><Insets top="0" right="0" bottom="0" left="0"/></padding>
-			</VBox>
-		</content>
-	</TitledPane>
-	
+       	<VBox>
+			<children>
+				<VBox>
+					<padding><Insets top="0" right="0" bottom="10" left="10"/></padding>
+					<Label text="Controls:" style="-fx-font-size: 12px;" />
+					<Label text="[d] : next attribute" style="-fx-font-size: 12px;" />
+					<Label text="[a] : previous attribute" style="-fx-font-size: 12px;" />
+					<Label text="[e] : toggle exploded" style="-fx-font-size: 12px;" /> 
+				</VBox>
+				<TitledPane text="Generations" animated="false">	
+					<content>
+						<VBox fx:id="chartVBox" >
+							<padding><Insets top="0" right="0" bottom="0" left="0"/></padding>
+						</VBox>
+					</content>
+				</TitledPane>
+			</children>
+		</VBox>	
 	</bottom>
 </BorderPane>

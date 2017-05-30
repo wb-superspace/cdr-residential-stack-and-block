@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -11,11 +12,12 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Stack;
 
+import com.sun.corba.se.impl.orbutil.graph.Node;
+
 import cdr.colour.HEXColour;
 import cdr.colour.HSVColour;
 import cdr.geometry.primitives.Point3D;
 import cdr.gui.javaFX.JavaFXGUI;
-import chart.StackChart;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -32,17 +34,18 @@ import javafx.legend.VBoxLegend;
 import javafx.scene.chart.Chart;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TitledPane;
-import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.FileChooser.ExtensionFilter;
 import model.StackAnalysis;
 import model.StackAnalysis.AnalysisAttribute;
 import model.StackAnalysis.AnalysisFloor;
-import model.StackAnalysis.AnalysisType;
+import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 
 public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRenderer> implements Initializable{
 
@@ -50,16 +53,15 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	public BorderPane applicationBorderPane;
 	
-	public TitledPane unitMixTitledPane;
-	public TitledPane statisticsTitledPane;
-	public TitledPane legendTitledPane;
-	
+	public TitledPane performanceTitledPane;
+
 	public VBox chartVBox;
 	
 	public MenuItem importGeometryMenuItem;
 	public MenuItem importUnitMixMenuItem;
+	public MenuItem importStackMenuItem;
 	
-	public MenuItem exportUnitDataMenuItem;
+	public MenuItem exportStackMenuItem;
 	public MenuItem exportImageMenuItem;
 	
 	public MenuItem startMenuItem;
@@ -112,7 +114,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			@Override
 			public void handle(ActionEvent event) {		
 				
-				if (application.importDXF()) {
+				if (application.importGeometry()) {
 					
 				}
 			}
@@ -123,7 +125,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			@Override
 			public void handle(ActionEvent event) {
 				
-				if (application.importCSV()) {
+				if (application.importUnitMix()) {
 					
 					initializeTitledPanes();
 					initializeCharts();
@@ -131,7 +133,19 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			}
 		});
 		
-		exportUnitDataMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+		importStackMenuItem.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+
+				if (application.importStack()) {
+					
+					
+				}
+			}
+		});
+		
+		exportStackMenuItem.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
@@ -143,7 +157,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				fc.setSelectedExtensionFilter(csvExtensionFilter);
 				File file = fc.showSaveDialog(null);
 
-				application.exportCSV(file);
+				application.exportStack(file);
 			}
 		});
 		
@@ -159,7 +173,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				fc.setSelectedExtensionFilter(csvExtensionFilter);
 				File file = fc.showSaveDialog(null);
 
-				application.exportPNG(file, chartVBox.getScene().getRoot());
+				application.exportImage(file, chartVBox.getScene().getRoot());
 			}
 		});
 		
@@ -190,6 +204,8 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	private void initializeCharts() {
 		
+		chartVBox.setStyle("-fx-background-color: white;");
+		
 		Chart distributionChart = application.sc.getDistributionChart();
 	
 		distributionChart.setPrefHeight(100);
@@ -207,22 +223,20 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	private void initializeTitledPanes() {
 		
-		application.sm.getFlag().addListener(new ChangeListener<Number>() {
+		application.se.getGeneration().addListener(new ChangeListener<Number>() {
 			@Override
 			public void changed(ObservableValue<? extends Number> observable, Number oldValue,
 					Number newValue) {
 
-				updateUnitMixTitledPane();
-				updateStatisticsTitledPane();
-				updateLegendTitledPane();
+				updatePerformanceTitledPane();
 			}
 		});
 		
-		application.renderAttribute.addListener(new ChangeListener<Number>() {
+		application.attributeIndex.addListener(new ChangeListener<Number>() {
 
 			@Override
 			public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
-				updateLegendTitledPane();
+				updatePerformanceTitledPane();
 			}
 		});
 	}
@@ -231,115 +245,206 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 		return "\u00A3" +  NumberFormat.getNumberInstance(Locale.US).format((int)value);
 	}
 	
-	private void updateUnitMixTitledPane() {
+	private void updatePerformanceTitledPane() {
 		
 		Platform.runLater(new Runnable() {
 			
 			@Override
 			public void run() {
-								
-				VBox unitMixVBox = new VBox();
-				ObservableList<LegendItem> unitMixLegendItems = FXCollections.observableArrayList();
 				
-				for (Map.Entry<String, Integer> entry : application.se.counts.entrySet()) {
-					
-					HEXColour colour = new HEXColour(application.sm.unitColors.get(entry.getKey()));
-					Integer count = entry.getValue();		
-					String label = entry.getKey() + " : " + count + " [" + application.sm.unitCounts.get(entry.getKey()) + "]";
-					float[] col = new float[]{colour.red(), colour.green(), colour.blue()};
-					
-					LegendItem unitMixLegendItem = new LegendItem(null, label, col);
-								
-					unitMixLegendItems.add(unitMixLegendItem);
+				if (application.sm == null || 
+					application.se == null ||
+					application.se.value.get() == -Float.MAX_VALUE ||
+					application.se.counts.isEmpty()) {
+					return;
 				}
-				
-				unitMixVBox.getChildren().add(new VBoxLegend<>(unitMixLegendItems, 150, 3));
-				unitMixTitledPane.setContent(unitMixVBox);
-			}
-		});
-	}
-				
-	private void updateLegendTitledPane() {
-		
-		Platform.runLater(new Runnable() {
-			
-			@Override
-			public void run() {
-									
-				VBox legendVBox = new VBox();
-				ObservableList<BarChartItem> legendItems = FXCollections.observableArrayList();
-				
-				int legendCount = 10;
-				String attribute = application.renderAttributes[application.renderAttribute.get()];
-				
+								
 				Map<Point3D, Stack<AnalysisFloor>> analysisStacks = application.se.getAnalysisStacks();
 				
+				VBox performanceVBox = new VBox();
+				performanceTitledPane.setContent(performanceVBox);
+										
+				ObservableList<BarChartItem> unitValueItems = FXCollections.observableArrayList();
+				ObservableList<BarChartItem> unitSumItems = FXCollections.observableArrayList();
+				ObservableList<BarChartItem> unitMixItems = FXCollections.observableArrayList();
+				
+				Map<String, List<AnalysisUnit>> unitTypes = new HashMap<>();
+				
+				for (String unitType : application.sm.getUnitTypes()) {
+					unitTypes.put(unitType, new ArrayList<>());
+				}
+				
+				float maxUnitValue = -Float.MAX_VALUE;
+				float totalUnitCount = 0f;
+				float totalFloorCount = 0f;
+				
+				for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+					for (AnalysisFloor analysisFloor : analysisStack) {
+						for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
+							
+							String unitType = analysisUnit.getUnitType();
+							
+							if (unitType != null) {
+
+								unitTypes.get(analysisUnit.getUnitType()).add(analysisUnit);
+								
+								if (analysisUnit.getAttribute("unitValue") > maxUnitValue) {
+									maxUnitValue = analysisUnit.getAttribute("unitValue");
+								}
+								
+								totalUnitCount ++;
+							}
+						}
+						
+						totalFloorCount ++;
+					}
+				}
+				
+				for (Map.Entry<String, List<AnalysisUnit>> unitType : unitTypes.entrySet()) {
+					
+					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(unitType.getValue(), "unitValue");
+					
+					String color = application.sm.unitColors.get(unitType.getKey());
+					HEXColour c = new HEXColour(color);
+					
+					int count = application.se.counts.get(unitType.getKey());
+					int max =  application.sm.unitCounts.get(unitType.getKey());
+					
+					float[] col = new float[]{c.red(), c.green(), c.blue()};
+					float value = analysisAttribute.getMean();
+					float sum = analysisAttribute.getSum();
+					
+					float valuePerc = value / maxUnitValue;
+					float sumPerc = sum / application.se.value.get();
+					float mixPerc = (float) count / (float) max;
+					
+					String typeLabel = unitType.getKey();
+					String typeCount = "[" + count + " | " + max + "]";
+					String valueLabel = formatToValue(value);
+					String sumLabel = formatToValue(sum);
+					
+					BarChartItem sumItem = new BarChartItem(typeLabel, sumLabel, col, sumPerc, 50, 10);
+					BarChartItem valueItem = new BarChartItem(typeLabel, valueLabel, col, valuePerc, 50, 10);
+					BarChartItem mixItem = new BarChartItem(typeLabel, typeCount, col, 0.2f, 50, 10);
+															
+					sumItem.getBeforeBarLabel().setPrefWidth(150);
+					sumItem.getAfterBarLabel().setPrefWidth(100);
+					
+					valueItem.getBeforeBarLabel().setPrefWidth(150);
+					valueItem.getAfterBarLabel().setPrefWidth(100);
+					
+					mixItem.getBeforeBarLabel().setPrefWidth(150);
+					mixItem.getAfterBarLabel().setPrefWidth(100);
+					
+					unitValueItems.add(valueItem);
+					unitSumItems.add(sumItem);
+					unitMixItems.add(mixItem);
+				}
+				
+				
+				TitledPane unitMixTitledPane = new TitledPane();
+				unitMixTitledPane.setText("unitMix : "  + (int) totalUnitCount );
+				unitMixTitledPane.setAnimated(false);
+				unitMixTitledPane.setContent(new GridPaneBarChart<>(unitMixItems));
+
+				performanceVBox.getChildren().add(unitMixTitledPane);
+				
+				
+				TitledPane avgTitledPane = new TitledPane();
+				avgTitledPane.setText("unitValue : [avg]");
+				avgTitledPane.setAnimated(false);
+				avgTitledPane.setContent(new GridPaneBarChart<>(unitValueItems));
+				
+				performanceVBox.getChildren().add(avgTitledPane);
+
+				TitledPane totalTitledPane = new TitledPane();
+				totalTitledPane.setText("totalValue : " +  formatToValue(application.se.value.get()));
+				totalTitledPane.setAnimated(false);
+				totalTitledPane.setContent(new GridPaneBarChart<>(unitSumItems));
+				
+				performanceVBox.getChildren().add(totalTitledPane);
+				
+				String attribute = application.attributes[application.attributeIndex.get()];
+				
 				if (attribute != "unitType") {
+																							
+					ObservableList<BarChartItem> legendItems = FXCollections.observableArrayList();
+										
+					AnalysisAttribute analysisAttribute;
 					
-					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttribute(analysisStacks, attribute, AnalysisType.UNIT);
+					String unit = null;
 					
-					Map<String, Integer> counts = application.se.counts;
-					Map<Float, List<Float>> bins = analysisAttribute.getBinValues(legendCount);
-					
-					float total = 0;
-					
-					for (Integer count : counts.values()) {
-						total += count;
+					if (attribute.contains("floor")) {
+						
+						List<AnalysisFloor> analysisFloors = new ArrayList<>();
+						
+						for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+							analysisFloors.addAll(analysisStack);
+						}
+						
+						analysisAttribute = StackAnalysis.getAnalysisAttributeFloor(analysisFloors, attribute);
+						
+						unit = "floors";
+						
+					} else { 
+						
+						List<AnalysisUnit> analysisUnits = new ArrayList<>();
+						
+						for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+							for (AnalysisFloor analysisFloor : analysisStack) {
+								analysisUnits.addAll(analysisFloor.getAnalysisUnits());
+							}
+						}
+						
+						analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(analysisUnits, attribute);
+						
+						unit = "units";
 					}
 					
-					if (total != 0) {
-						
-						for (Map.Entry<Float, List<Float>> bin : bins.entrySet()) {
-							
-							HSVColour c = new HSVColour() ;
-							c.setHSV((1-(analysisAttribute.getMappedValue(bin.getKey()))) * 0.6f, 1f, 1f) ;
-							
-							float[] col = new float[]{c.red(), c.green(), c.blue()};						
-							float size = (float) bin.getValue().size() / total + 0.01f;
-														
-							String valueLabel = formatToValue(bin.getKey());
-							String countLabel = Integer.toString(bin.getValue().size());
-							
-							BarChartItem legendItem = new BarChartItem(valueLabel, countLabel, col, size, 80, 10);
-							
-							legendItem.getBeforeBarLabel().setPrefWidth(50);
-							legendItem.getAfterBarLabel().setPrefWidth(20);
-							
-							legendItems.add(legendItem);
-						}
-					}	
-				} 
-
-				Label legendLabel = new Label(attribute + " :");
-				legendLabel.setStyle("-fx-font-size: 12px;");
+					Map<Float, List<Float>> bins = analysisAttribute.getBinValues(10);
 					
-				legendVBox.getChildren().add(legendLabel);
-				legendVBox.getChildren().add(new GridPaneBarChart<>(legendItems));
-				//legendTitledPane.setText("Legend [" + legendType + "]" );
-				legendTitledPane.setContent(legendVBox);
-			}
-		});
-	}
-	
-	private void updateStatisticsTitledPane() {
-	
-		Platform.runLater(new Runnable() {
-			
-			@Override
-			public void run() {
-								
-				VBox statisticsVBox = new VBox();
-				ObservableList<LegendItem> statisticsLegendItems = FXCollections.observableArrayList();
-
-				float[] col = new float[]{0,0,0};
-				
-				String value = formatToValue(application.se.value.get());
-				
-				LegendItem valueLegendItem = new LegendItem(null, "TOTAL VALUE : " + value, col);							
-				statisticsLegendItems.add(valueLegendItem);
-
-				statisticsVBox.getChildren().add(new VBoxLegend<>(statisticsLegendItems, 150, 3));
-				statisticsTitledPane.setContent(statisticsVBox);
+					List<Float> values = new ArrayList<>(bins.keySet());
+					
+					for (int i =0; i<values.size(); i++) {
+						
+						Float value = values.get(i);
+						List<Float> items = bins.get(value);
+						
+						HSVColour c = new HSVColour() ;
+						c.setHSV((1-(analysisAttribute.getMappedValue(value))) * 0.6f, 1f, 1f) ;
+						
+						float[] col = new float[]{c.red(), c.green(), c.blue()};
+						
+						float perc = 0;
+						
+						String valueLabel = formatToValue(value);
+						String countLabel = items.size() + " " + unit;
+						
+						if (i != values.size() -1) {
+							valueLabel += " - " + formatToValue(values.get(i+1) - 1);
+						}
+						
+						if (unit == "floors") {
+							perc = (float) items.size() / (float) totalFloorCount;
+						} else {
+							perc = (float) items.size() / (float) totalUnitCount;
+						}
+						
+						perc += 0.01;
+						
+						BarChartItem legendItem = new BarChartItem(valueLabel, countLabel, col, perc, 50, 10);		
+						legendItem.getBeforeBarLabel().setPrefWidth(150);
+						legendItem.getAfterBarLabel().setPrefWidth(100);
+						legendItems.add(legendItem);
+					}
+					
+					TitledPane legendTitledPane = new TitledPane();
+					legendTitledPane.setText(attribute + " : ");
+					legendTitledPane.setAnimated(false);
+					legendTitledPane.setContent(new GridPaneBarChart<>(legendItems));
+					
+					performanceVBox.getChildren().add(legendTitledPane);
+				}
 			}
 		});
 	}

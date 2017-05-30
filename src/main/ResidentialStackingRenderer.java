@@ -2,15 +2,20 @@ package main;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Stack;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import javax.media.opengl.GL2;
 
 import com.jogamp.opengl.util.gl2.GLUT;
+import com.sun.jmx.snmp.tasks.ThreadService;
 
 import cdr.colour.HEXColour;
 import cdr.colour.HSVColour;
@@ -26,30 +31,25 @@ import cdr.geometry.primitives.Text3D;
 import cdr.geometry.renderer.GeometryRenderer;
 import cdr.joglFramework.camera.GLCamera;
 import cdr.joglFramework.camera.GLCameraAxonometric;
+import cdr.joglFramework.camera.GLCameraInfinity;
 import cdr.joglFramework.event.KeyEvent;
 import cdr.joglFramework.event.listener.impl.SimpleKeyListener;
 import cdr.joglFramework.frame.GLFramework;
 import cdr.joglFramework.renderer.OpaqueRendererWithGUI;
 import cdr.joglFramework.snapshot.CombinedSnapshot;
-import cdr.mesh.datastructure.Face;
 import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMeshFactory;
-import cdr.mesh.renderer.MeshRenderer3D;
-import cdr.mesh.renderer.MeshRenderer3DFlatShaded;
 import cdr.mesh.renderer.MeshRenderer3DOutline;
-import cdr.mesh.renderer.MeshRenderer3DSmoothShaded;
 import cdr.mesh.toolkit.operators.MeshOperators;
 import chart.StackChart;
 import fileio.CsvReader;
 import fileio.FileDialogs;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.scene.Node;
-import javafx.scene.Parent;
 import javafx.util.Callback;
 import model.StackAnalysis;
 import model.StackAnalysis.AnalysisAttribute;
 import model.StackAnalysis.AnalysisFloor;
-import model.StackAnalysis.AnalysisType;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 import model.StackEvaluator;
 import model.StackManager;
@@ -72,7 +72,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	 * =========================================================
 	 */
 	
-	String[] renderAttributes = new String[] {
+	String[] attributes = new String[] {
 			"unitType", 
 			"unitVisibilityPremium",
 			"unitFloorPremium",
@@ -81,7 +81,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 			"floorValue",
 			"floorDelta"};
 		
-	SimpleIntegerProperty renderAttribute = new SimpleIntegerProperty(0);
+	SimpleIntegerProperty attributeIndex = new SimpleIntegerProperty(0);
 	
 	boolean renderExploded = false;
 		
@@ -113,18 +113,18 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				
 				if(e.getKeyChar() == 'd') {
 					
-					if (renderAttribute.get() == renderAttributes.length-1)	renderAttribute.set(0);
-					else renderAttribute.set(renderAttribute.get()+1);;		
+					if (attributeIndex.get() == attributes.length-1)	attributeIndex.set(0);
+					else attributeIndex.set(attributeIndex.get()+1);;		
 					
-					System.out.println(renderAttributes[renderAttribute.get()]);
+					System.out.println(attributes[attributeIndex.get()]);
 				}
 				
 				if(e.getKeyChar() == 'a') {
 					
-					if (renderAttribute.get() == 0) renderAttribute.set(renderAttributes.length-1);
-					else renderAttribute.set(renderAttribute.get()-1);;		
+					if (attributeIndex.get() == 0) attributeIndex.set(attributes.length-1);
+					else attributeIndex.set(attributeIndex.get()-1);;		
 					
-					System.out.println(renderAttributes[renderAttribute.get()]);
+					System.out.println(attributes[attributeIndex.get()]);
 				}
 			}
 		});
@@ -139,12 +139,23 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	protected void renderFill(GL2 gl) {
 								
 		if (sm != null && se != null) {
-
+			
+			String attribute = attributes[attributeIndex.get()];
+			
 			Map<Point3D, Stack<AnalysisFloor>> analysisStacks = se.getAnalysisStacks();
+			List<AnalysisUnit> analysisUnits = new ArrayList<>();
 			
-			String attribute = renderAttributes[renderAttribute.get()];
+			for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+				for (AnalysisFloor analysisFloor : analysisStack) {
+					for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
+						if (analysisUnit.getUnitType() != null) {
+							analysisUnits.add(analysisUnit);
+						}
+					}
+				}
+			}
 			
-			AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttribute(analysisStacks, attribute, AnalysisType.UNIT);
+			AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(analysisUnits, attribute);
 			
 			for (Point3D footprint : analysisStacks.keySet()) {
 				
@@ -215,7 +226,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				
 				gl.glLineWidth(0.1f);
 				gl.glColor3f(0, 0, 0);			
-				mr.renderCornerEdges(gl, m, 1f);
+				mr.renderBoundaryEdges(gl, m);
 			}
 		}
 	}
@@ -290,12 +301,6 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		}
 	}
 	
-	private void reset() {	
-		
-		se.reset(sm);
-		sc.reset();
-	}
-	
 	public void stop() {
 		
 		se.stop();
@@ -303,11 +308,14 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	public void start() {	
 		
-		this.reset();
+		sm.clearStacks();
+		se.clearEvaluations();
+		sc.clearCharts();
 		
 		new Thread(new Runnable() {
 		    public void run() {
-				if (se != null && sm != null) {					
+				if (se != null && sm != null) {	
+					se.initialize(null);
 					se.start();
 				}
 		    }
@@ -318,10 +326,10 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		// TODO;
 	}
 				
-	public boolean importDXF() {
+	public boolean importGeometry() {
 					
 		sm = new StackManager();
-		se = new StackEvaluator();
+		se = new StackEvaluator(sm);
 		sc = new StackChart(sm, se);
 
 		File file = FileDialogs.openFileFX("dxf");
@@ -396,7 +404,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	}
 
 
-	public void exportPNG(File file, Node root) {
+	public void exportImage(File file, Node root) {
 
 		(new CombinedSnapshot()).createSnapshot(root, f, 2, new Callback<BufferedImage, Void>() {
 
@@ -408,40 +416,18 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 			}
 		}) ;
 	}
-	
-	public void exportCSV(File file) {
 		
-		if (se == null) return;
+	public void exportStack(File file) {
+		
+		if (se == null) {
+			return;
+		}
 		
 		System.out.println("writing to output...");
 		
-		String output = "FLOOR INDEX, FOOTPRINT TYPE, FLOOR TYPE, FLOOR VALUE, FLOOR COST, UNIT TYPE, UNIT VALUE, UNIT VISIBILITY \n";
-		
-		Map<Point3D, Stack<AnalysisFloor>> analysisStacks = se.getAnalysisStacks();
-		
-		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysisStacks.entrySet()) {
-			for (AnalysisFloor analysisFloor : analysisEntry.getValue()) {
-				for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
-					
-					if (analysisUnit.getUnitType() == null) {
-						continue;
-					}
-					
-					String unitString = "";
-					
-					unitString += analysisUnit.getFloorIndex() + ",";
-					unitString += analysisUnit.getFootprintType() + ",";
-					unitString += analysisUnit.getFloorplateType() + ",";
-					unitString += analysisUnit.getAttribute("floorValue") + ",";
-					unitString += analysisUnit.getAttribute("floorCost") + ",";
-					unitString += analysisUnit.getUnitType() + ",";
-					unitString += analysisUnit.getAttribute("unitValue") + ",";
-					unitString += analysisUnit.getAttribute("unitVisibility") + "\n";
-					
-					output += unitString;
-				}
-			}
-		}
+		String output = "footprintIndex, floorIndex, footprintType, floorplateType";
+				
+		output += "\n" + StackAnalysis.hashAnalysisStack(se.getAnalysisStacks());
 		
 		try {
 			FileWriter writer = new FileWriter(file);
@@ -454,7 +440,49 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		System.out.println("...done");
 	}
 	
-	public boolean importCSV() {
+	public boolean importStack() {
+		
+		if (this.sm == null || this.se == null) {
+			return false;
+		}
+		
+		sm.clearStacks();
+		se.clearEvaluations();
+		sc.clearCharts();
+		
+		File file = FileDialogs.openFileFX("csv");
+
+		if (file != null) {
+			
+			try {
+				
+				Scanner scanner = new Scanner(file);
+				scanner.useDelimiter("\\Z");
+				
+				se.initialize(StackAnalysis.unHashStack(this.sm, scanner.next()));
+																	
+				scanner.close();
+				
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		}
+		
+		return false;
+	}
+	
+	public boolean importUnitMix() {
+		
+		if (this.sm == null) {
+			return false;
+		}
+		
+		sm.clearStacks();
+		se.clearEvaluations();
+		sc.clearCharts();
+		sm.clearUnitMix();
 				
 		File file = FileDialogs.openFileFX("csv");
 		

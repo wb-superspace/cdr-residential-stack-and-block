@@ -26,6 +26,9 @@ import cdr.mesh.toolkit.operators.MeshOperators;
 import cern.colt.list.adapter.FloatListAdapter;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleFloatProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import jdk.nashorn.internal.ir.Flags;
+import jogamp.graph.curve.tess.Loop;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 import sun.net.www.content.text.plain;
@@ -48,8 +51,14 @@ public class StackEvaluator {
 		
 	public SimpleBooleanProperty evaluate = new SimpleBooleanProperty(false);
 	
+	public SimpleIntegerProperty generation = new SimpleIntegerProperty(0);
+	
 	RayTracer rt = new RayTracer();
-		
+	
+	public StackEvaluator(StackManager sm) {
+		this.sm = sm;
+	}
+	
 	/*
 	 * =========================================================
 	 * EVALUATIONS
@@ -81,7 +90,10 @@ public class StackEvaluator {
 	private void evaluateFloor(AnalysisFloor analysisFloor) {
 		
 		String floorHash = analysisFloor.getHashString();
-		
+		for (int p : analysisFloor.getRelativPosition()) {
+			floorHash += "," + p;
+		}
+				
 		if (floorHashes.containsKey(floorHash)) {	
 			analysisFloor.copy(floorHashes.get(floorHash));
 			return;
@@ -211,7 +223,11 @@ public class StackEvaluator {
 	public Map<Point3D, Stack<AnalysisFloor>> getAnalysisStacks() {		
 		return new HashMap<>(analysis);
 	}
-			
+	
+	public SimpleIntegerProperty getGeneration() {
+		return this.generation;
+	}
+	
 	private String swapFloorplateType(String footprintType, String floorplateType) {
 		
 		List<String> selection = new ArrayList<>();
@@ -291,7 +307,7 @@ public class StackEvaluator {
 							 
 							float vc = sAnalysisFloor.getAttribute("floorDelta") + tAnalysisFloor.getAttribute("floorDelta");
 							float vt = sAnalysisFloorClone.getAttribute("floorDelta") + tAnalysisFloorClone.getAttribute("floorDelta");
-							 												 
+														
 							if (vc < vt) {
 								 
 								sm.swapFloors(footprint, s, t);												
@@ -358,7 +374,7 @@ public class StackEvaluator {
 						
 			Point3D footprint = sm.getFootprints().get(pointer[0]);
 			
-			if (sm.getStack(footprint).get(pointer[1]) != null || value.get() == -Float.MAX_VALUE) {
+			if (sm.getStack(footprint).get(pointer[1]) != null || this.generation.get() == 0) {
 				
 				float option = new Random().nextFloat();
 								
@@ -403,56 +419,73 @@ public class StackEvaluator {
 			stackHashes.add(hashString);
 		}
 	}
-			
-	public void reset(StackManager sm) {
-		
-		this.sm = sm;
+				
+	public void clearEvaluations() {
 		this.stackHashes = new HashSet<>();
 		this.floorHashes = new HashMap<>();
 		this.counts = new ConcurrentHashMap<>();
 		this.value = new SimpleFloatProperty(-Float.MAX_VALUE);
 		this.analysis = new ConcurrentHashMap<>();
-		
-		sm.reset();		
-				
-		boolean valid = true;
-		
-		while (valid) {
-			
-			valid = false;
-			
-			for (Point3D footprint : sm.getFootprints()) {
-				
-				String floorplateType = swapFloorplateType(sm.getFootprintType(footprint), null);
-				
-				if (floorplateType != null) {
-					sm.pushFloor(footprint, floorplateType);
-					
-					valid = true;
-				}
-			}
-		}
-		
-		for (Point3D footprint : sm.getFootprints()) {
-			for (int i = 0; i<sm.getStack(footprint).size(); i++) {
-				sm.getStack(footprint).set(i, null);
-			}
-		}
-		
-		for (String unitType : sm.getUnitTypes()) {
-			this.counts.put(unitType, 0);
-		}
 	}
 	
-	private void update() {
+	public void initialize(Map<Point3D, Stack<String>> state) {
+		
+		System.out.println("init : " + state);
+		
+		if (state == null) {
+			
+			boolean valid = true;
+			
+			while (valid) {
+				
+				valid = false;
+				
+				for (Point3D footprint : sm.getFootprints()) {
+					
+					String floorplateType = swapFloorplateType(sm.getFootprintType(footprint), null);
+					
+					if (floorplateType != null) {
+						sm.pushFloor(footprint, floorplateType);
+						
+						valid = true;
+					}
+				}
+			}
+			
+			for (Point3D footprint : sm.getFootprints()) {
+				for (int i = 0; i<sm.getStack(footprint).size(); i++) {
+					sm.getStack(footprint).set(i, null);
+				}
+			}
+			
+		} else {
+			
+			sm.restoreState(state);
+		}
+		
+		setAnalysisStacks();		
 		
 		this.value.set(evaluateStacks(this.analysis));
 		
 		for (String unitType : sm.getUnitTypes()) {
 			this.counts.put(unitType, sm.getUnitCount(unitType));
 		}
+		
+		print();
+	}
+	
+	private void update() {
+		
+		if (this.generation.get() != 0) {
+			
+			this.value.set(evaluateStacks(this.analysis));
+			
+			for (String unitType : sm.getUnitTypes()) {
+				this.counts.put(unitType, sm.getUnitCount(unitType));
+			}
+		}
 				
-		sm.flag();
+		this.generation.set(this.generation.get()+1);
 	}
 	
 	public void stop() {
@@ -468,31 +501,33 @@ public class StackEvaluator {
 		
 		int pool = 100;
 				
-		elite.put(-Float.MAX_VALUE, sm.saveState());
+		elite.put(evaluateStacks(this.analysis), sm.saveState());
 		
-		do {
+		loop : do {
 						
 			SortedMap<Float, Map<Point3D, Stack<String>>> front = new TreeMap<>(elite);
 									
 			elite.clear();
 			
- 			System.out.println(" ---> new front : " + front.size());		
-			 			
+ 			System.out.println(" ---> new front : " + front.size());	
+ 			 			
 			for (Map.Entry<Float, Map<Point3D, Stack<String>>> f : front.entrySet()) {
 				
 				sm.restoreState(f.getValue());
 				
 				setAnalysisStacks();
-								
+										
+				update();
+				
 				boolean flag = false;
 				
-				if (f.getKey() != -Float.MAX_VALUE) update();
-				
-				int offspring = (int) pool / front.size();
-				
-				for (int p = offspring; p > 0 ; p--) {
-						
+				for (int p = (int) pool / front.size(); p > 0 ; p--) {
+										
 					sm.saveStacks();
+					
+					if (evaluate.get() == false) {						
+						break loop;
+					}
 										
 					mutateStackFloors();							
 											
@@ -505,8 +540,9 @@ public class StackEvaluator {
 										
 					sm.restoreStacks();				
 				}
-				
+								
 				if (!flag) {
+					
 					elite.put(f.getKey(), f.getValue());
 				}
 			}

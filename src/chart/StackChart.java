@@ -69,7 +69,7 @@ public class StackChart {
 		//---------------------------
 		
 		this.distributionValueAxis = new NumberAxis();
-		this.distributionValueAxis.setLabel("Stack Distribution");
+		this.distributionValueAxis.setLabel("Stack Distribution [\u00A3]");
 		this.distributionValueAxis.setAutoRanging(false);
 
 		this.distributionGenerationAxis = new CategoryAxis();
@@ -83,7 +83,7 @@ public class StackChart {
 		//---------------------------
 
 		this.valueValueAxis = new NumberAxis();
-		this.valueValueAxis.setLabel("Value Increase");
+		this.valueValueAxis.setLabel("Value Increase [\u00A3]");
 		this.valueValueAxis.setAutoRanging(false);
 		
 		this.valueGenerationAxis = new CategoryAxis();
@@ -114,7 +114,7 @@ public class StackChart {
 		this.minValue.addListener(updateListener);
 		this.maxValue.addListener(updateListener);
 		
-		this.sm.getFlag().addListener(new ChangeListener<Number>() {
+		this.se.getGeneration().addListener(new ChangeListener<Number>() {
 
 			@Override
 			public void changed(ObservableValue<? extends Number> observable, Number oldValue, Number newValue) {
@@ -129,7 +129,7 @@ public class StackChart {
 			}
 		});
 		
-		reset();
+		clearCharts();
 	}
 	
 	public StackedBarChart<String, Number> getDistributionChart() {
@@ -140,7 +140,7 @@ public class StackChart {
 		return this.valueChart;
 	}
 		
-	public void reset() {
+	public void clearCharts() {
 					
 		this.distributionSeries.clear();
 		this.distributionChart.getData().clear();

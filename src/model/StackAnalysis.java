@@ -8,28 +8,19 @@ import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
 
-import org.apache.commons.math3.ode.FirstOrderConverter;
+import com.sun.corba.se.spi.orb.StringPair;
 
-import cdr.colour.HSVColour;
 import cdr.geometry.primitives.ArrayPoint3D;
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Point3D;
 import cdr.geometry.primitives.Polygon3D;
 import cdr.geometry.primitives.Vector3D;
 import cdr.mesh.datastructure.Mesh3D;
-import javafx.legend.BarChartItem;
-import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 
 public class StackAnalysis {
 
 	private static float D = 3;
-	
-	public enum AnalysisType  {
-		ATTRIBUTE,
-		UNIT,
-		FLOOR,
-	}
 	
 	/*
 	 * =========================================================
@@ -37,36 +28,82 @@ public class StackAnalysis {
 	 * =========================================================
 	 */
 	
-	public static AnalysisAttribute getAnalysisAttribute(Map<Point3D, Stack<AnalysisFloor>> analysisStacks, String attribute, AnalysisType analysisType) {
+	public static AnalysisAttribute getAnalysisAttributeUnit(List<AnalysisUnit> analysisUnits, String attribute) {
 		
 		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
 		
-		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
-			for (AnalysisFloor analysisFloor: analysisStack) {
-				
-				if (analysisType == AnalysisType.FLOOR) {
-					analysisAttribute.addValue(analysisFloor.getAttribute(attribute));
-				
-				} else if (analysisType == AnalysisType.UNIT) {
-					for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
-						if (analysisUnit.getUnitType() != null) {
-							analysisAttribute.addValue(analysisUnit.getAttribute(attribute));
-						}
-					}
-				}
+		for (AnalysisUnit analysisUnit : analysisUnits) {
+			if (analysisUnit.getUnitType() != null) {
+				analysisAttribute.addValue(analysisUnit.getAttribute(attribute));
 			}
 		}
 		
 		return analysisAttribute;
 	}
+	
+	public static AnalysisAttribute getAnalysisAttributeFloor(List<AnalysisFloor> analysisFloors, String attribute) {
+		
+		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
+		
+		for (AnalysisFloor analysisFloor : analysisFloors) {
+			analysisAttribute.addValue(analysisFloor.getAttribute(attribute));
+		}
+		
+		return analysisAttribute;
+	}
+	
+	public static Map<Point3D, Stack<String>> unHashStack(StackManager sm, String hashString) {
+		
+		Map<Point3D, Stack<String>> stacks = new HashMap<>();
+		Map<Point3D, String[]> unHash = new HashMap<>();
+		
+		String[] floors = hashString.split("\n");
+		
+		
+		for (int i=1; i<floors.length; i++) {
 			
+			String floor = floors[i];
+			
+			System.out.println(floor);
+			
+			String[] floorData = floor.split(",");
+			
+			int footprintIndex = Integer.parseInt(floorData[0]);
+			int floorplateIndex = Integer.parseInt(floorData[1]);
+			
+			String footprintType = floorData[2];
+			String floorplateType = floorData[3];
+			
+			Point3D footprint = sm.getFootprints().get(footprintIndex);
+			
+			if (!unHash.containsKey(footprint)) {
+				unHash.put(footprint, new String[floors.length]);
+			}
+			
+			unHash.get(footprint)[floorplateIndex] = floorplateType;
+		}
+		
+		for (Map.Entry<Point3D, String[]> hashStack : unHash.entrySet()) {
+			
+			stacks.put(hashStack.getKey(), new Stack<>());
+			
+			for (String floorplateType : hashStack.getValue()) {
+				if (floorplateType != null) {
+					stacks.get(hashStack.getKey()).push(floorplateType);
+				}
+			}
+		}
+		
+		return stacks;
+	}
+				
 	public static String hashAnalysisStack( Map<Point3D, Stack<AnalysisFloor>> analysisStacks) {
 		
 		String hashString = "";
 		
 		for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
 			for (AnalysisFloor analysisFloor: analysisStack) {
-				hashString += analysisFloor.getHashString();
+				hashString += analysisFloor.getHashString() +"\n";
 			}
 		}
 		
@@ -129,6 +166,21 @@ public class StackAnalysis {
 		
 		public List<Float> getValues() {
 			return this.values;
+		}
+		
+		public float getMean() {	
+			return getSum() / this.values.size();
+		}
+		
+		public float getSum() {
+			
+			float sum = 0;
+			
+			for (float value : this.values) {
+				sum += value;
+			}
+			
+			return sum;
 		}
 		
 		public void addValue(Float value) {
@@ -278,6 +330,10 @@ public class StackAnalysis {
 			return this.footprint;
 		}
 		
+		public int getFootprintIndex() {
+			return sm.getFootprints().indexOf(this.footprint);
+		}
+		
 		public String getFootprintType() {
 			return this.sm.getFootprintType(this.footprint);
 		}
@@ -309,34 +365,37 @@ public class StackAnalysis {
 		}
 		
 		public String getHashString() {
+												
+			String hashString = "";
 			
-			List<Point3D> footprints = this.sm.getFootprints();
-							
-			String hashString = this.getFloorplateType() + "|";
+			hashString += this.getFootprintIndex() + ",";
+			hashString += this.floorIndex + ",";
+			hashString += this.getFootprintType() + ",";
+			hashString += this.getFloorplateType();
+						
+			return hashString;
+		}
+		
+		public int[] getRelativPosition() {
 			
-			int floorIndex = this.floorIndex;
-			int footprintIndex = footprints.indexOf(this.footprint);
-			
-			hashString += footprintIndex + "|";
-			hashString += floorIndex + "|";
-			
-			for (int j = 0; j<footprints.size(); j++) {
-			
-				int stackSize = sm.getStack(footprints.get(j)).size();
+			int[] position = new int[this.sm.getFootprints().size()]; 
+						
+			for (int j = 0; j< this.sm.getFootprints().size(); j++) {
+				
 				int relationship = 0;
 				
-				if (j != footprintIndex) {					
-					relationship = floorIndex - stackSize;
+				if (j != this.getFootprintIndex()) {					
+					relationship = this.floorIndex - sm.getStack(this.sm.getFootprints().get(j)).size();
 				}
 				
 				if (relationship < 0) { // TODO - this assumes that all points are looking down
 					relationship = -1;
 				}
 				
-				hashString += relationship + "|";
+				position[j] = relationship;
 			}
 			
-			return hashString;
+			return position;
 		}
 				
 		/*

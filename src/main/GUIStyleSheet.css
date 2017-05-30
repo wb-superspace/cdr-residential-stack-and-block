@@ -129,7 +129,9 @@ TITLED PANE -----------------------------------------------------------
   -fx-border-width: 0px; 
 }
 
-
+.titled-pane .label {
+ 	-fx-font-size: 12px;
+ }
 
 /*
  * LIST VIEW ------------------------------------------------------------
@@ -279,4 +281,6 @@ TITLED PANE -----------------------------------------------------------
  .sidebar-contentpane { 
  	-fx-background-color: white;   
  }
+
+
  
