@@ -5,18 +5,14 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.Stack;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import javax.media.opengl.GL2;
 
 import com.jogamp.opengl.util.gl2.GLUT;
-import com.sun.jmx.snmp.tasks.ThreadService;
-
 import cdr.colour.HEXColour;
 import cdr.colour.HSVColour;
 import cdr.fileIO.dxf2.DXFDocument2;
@@ -31,7 +27,6 @@ import cdr.geometry.primitives.Text3D;
 import cdr.geometry.renderer.GeometryRenderer;
 import cdr.joglFramework.camera.GLCamera;
 import cdr.joglFramework.camera.GLCameraAxonometric;
-import cdr.joglFramework.camera.GLCameraInfinity;
 import cdr.joglFramework.event.KeyEvent;
 import cdr.joglFramework.event.listener.impl.SimpleKeyListener;
 import cdr.joglFramework.frame.GLFramework;
@@ -500,6 +495,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				String unitColor = line[4].trim();
 
 				sm.addUnit(unitType, unitCount, unitValue, unitValueCap, unitColor);
+				
+				System.out.println(unitType + " -> " + unitCount);
 			}
 			
 			return true;

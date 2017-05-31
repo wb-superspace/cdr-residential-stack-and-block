@@ -52,7 +52,7 @@ public class StackEvaluator {
 	public SimpleBooleanProperty evaluate = new SimpleBooleanProperty(false);
 	
 	public SimpleIntegerProperty generation = new SimpleIntegerProperty(0);
-	
+		
 	RayTracer rt = new RayTracer();
 	
 	public StackEvaluator(StackManager sm) {
@@ -79,6 +79,7 @@ public class StackEvaluator {
 	public static float evaluateStack(Stack<AnalysisFloor> analysisStack) {
 		
 		float value = 0;
+		
 				
 		for (AnalysisFloor analysisFloor: analysisStack) {
 			value += analysisFloor.getAttribute("floorDelta");
@@ -444,7 +445,7 @@ public class StackEvaluator {
 					
 					String floorplateType = swapFloorplateType(sm.getFootprintType(footprint), null);
 					
-					if (floorplateType != null) {
+					if (floorplateType != null && isPushFloorValid(null, footprint)) {
 						sm.pushFloor(footprint, floorplateType);
 						
 						valid = true;
@@ -474,32 +475,33 @@ public class StackEvaluator {
 		print();
 	}
 	
-	private void update() {
-		
-		if (this.generation.get() != 0) {
+	public void evaluate(int generation) {
+				
+		if (generation != 0) {
 			
 			this.value.set(evaluateStacks(this.analysis));
 			
 			for (String unitType : sm.getUnitTypes()) {
 				this.counts.put(unitType, sm.getUnitCount(unitType));
-			}
-		}
-				
-		this.generation.set(this.generation.get()+1);
+			}	
+		} 
+		
+		this.generation.set(generation);
 	}
 	
 	public void stop() {
 		
-		evaluate.set(false);
+		this.evaluate.set(false);
 	}
 	
 	public void start() {
 		
-		evaluate.set(true);	
+		this.evaluate.set(true);
 		
 		SortedMap<Float, Map<Point3D, Stack<String>>> elite = new TreeMap<>();
 		
 		int pool = 100;
+		int generation = 0;
 				
 		elite.put(evaluateStacks(this.analysis), sm.saveState());
 		
@@ -517,7 +519,7 @@ public class StackEvaluator {
 				
 				setAnalysisStacks();
 										
-				update();
+				evaluate(generation);
 				
 				boolean flag = false;
 				
@@ -525,7 +527,10 @@ public class StackEvaluator {
 										
 					sm.saveStacks();
 					
-					if (evaluate.get() == false) {						
+					if (evaluate.get() == false) {	
+						
+						elite.putAll(front);
+						
 						break loop;
 					}
 										
@@ -540,11 +545,13 @@ public class StackEvaluator {
 										
 					sm.restoreStacks();				
 				}
-								
+												
 				if (!flag) {
 					
 					elite.put(f.getKey(), f.getValue());
 				}
+				
+				generation++;
 			}
 			
 			if (elite.keySet().size() == 0) {	
@@ -572,7 +579,7 @@ public class StackEvaluator {
 		
 		setAnalysisStacks();
 		
-		update();
+		evaluate(++generation);
 										
 		print();
 	}

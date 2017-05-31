@@ -68,7 +68,7 @@
 					<Label text="[a] : previous attribute" style="-fx-font-size: 12px;" />
 					<Label text="[e] : toggle exploded" style="-fx-font-size: 12px;" /> 
 				</VBox>
-				<TitledPane text="Generations" animated="false">	
+				<TitledPane fx:id="chartTitledPane" text="Generations" expanded="false" animated="false">	
 					<content>
 						<VBox fx:id="chartVBox" >
 							<padding><Insets top="0" right="0" bottom="0" left="0"/></padding>

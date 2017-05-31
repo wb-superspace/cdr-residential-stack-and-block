@@ -52,14 +52,13 @@ public class StackAnalysis {
 		return analysisAttribute;
 	}
 	
-	public static Map<Point3D, Stack<String>> unHashStack(StackManager sm, String hashString) {
+	public static Map<Point3D, Stack<String>> unHashStack(StackManager sm, String hashString) { // TODO - this needs a lot of work
 		
 		Map<Point3D, Stack<String>> stacks = new HashMap<>();
 		Map<Point3D, String[]> unHash = new HashMap<>();
 		
 		String[] floors = hashString.split("\n");
-		
-		
+			
 		for (int i=1; i<floors.length; i++) {
 			
 			String floor = floors[i];
@@ -71,8 +70,8 @@ public class StackAnalysis {
 			int footprintIndex = Integer.parseInt(floorData[0]);
 			int floorplateIndex = Integer.parseInt(floorData[1]);
 			
-			String footprintType = floorData[2];
-			String floorplateType = floorData[3];
+			String footprintType = floorData[2].trim();
+			String floorplateType = floorData[3].trim();
 			
 			Point3D footprint = sm.getFootprints().get(footprintIndex);
 			
@@ -83,9 +82,11 @@ public class StackAnalysis {
 			unHash.get(footprint)[floorplateIndex] = floorplateType;
 		}
 		
+		for (Point3D footprint : sm.getFootprints()) {
+			stacks.put(footprint, new Stack<>());
+		}
+		
 		for (Map.Entry<Point3D, String[]> hashStack : unHash.entrySet()) {
-			
-			stacks.put(hashStack.getKey(), new Stack<>());
 			
 			for (String floorplateType : hashStack.getValue()) {
 				if (floorplateType != null) {

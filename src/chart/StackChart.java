@@ -122,8 +122,10 @@ public class StackChart {
 				Platform.runLater(new Runnable() {
 					
 					@Override
-					public void run() {								
-						addValues(StackChart.this.se.getAnalysisStacks(), (int) newValue);
+					public void run() {		
+						if (oldValue.intValue() < newValue.intValue()) {
+							addValues(StackChart.this.se.getAnalysisStacks(), (int) newValue);
+						}
 					}
 				});
 			}
@@ -159,7 +161,7 @@ public class StackChart {
 		this.maxValue.set(-Float.MAX_VALUE);
 	}
 	
-	public void addValues(Map<Point3D, Stack<AnalysisFloor>> analysisStacks, int generation) {
+	private void addValues(Map<Point3D, Stack<AnalysisFloor>> analysisStacks, int generation) {
 		
 		float value = 0;
 		

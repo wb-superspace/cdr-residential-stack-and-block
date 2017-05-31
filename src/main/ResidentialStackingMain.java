@@ -53,6 +53,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	public BorderPane applicationBorderPane;
 	
+	public TitledPane chartTitledPane;
 	public TitledPane performanceTitledPane;
 
 	public VBox chartVBox;
@@ -181,7 +182,8 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 			@Override
 			public void handle(ActionEvent event) {
-				application.start();		
+				application.start();
+				chartTitledPane.setExpanded(true);
 			}
 		});
 		

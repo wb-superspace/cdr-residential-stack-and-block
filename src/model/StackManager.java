@@ -32,7 +32,7 @@ public class StackManager {
 	
 	public float floorplateCostBase = 1250f; 							// AECOM
 	
-	public float floorplateCostFloorMultiplier = 3f; 					// AECOM
+	public float floorplateCostFloorMultiplier = 35f; 					// AECOM
 	
 	public float unitPremiumFloorMultiplier = 0.015f; 					// AECOM (1.5% -> 2.2% (PH))
 		
