@@ -460,6 +460,14 @@ public class StackAnalysis {
 				return AnalysisFloor.this.sm.getUnitArea(this.unit);
 			}
 			
+			public float getBaseValue() {
+				return AnalysisFloor.this.sm.unitValues.get(this.getUnitType()) * this.getArea();
+			}
+			
+			public float getBaseCost() {
+				return AnalysisFloor.this.sm.floorplateCostBase * this.getArea();
+			}
+			
 			public void addAttribute(String attribute, float value) {
 				this.attributes.put(attribute, value);
 			}

@@ -68,13 +68,15 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	 */
 	
 	String[] attributes = new String[] {
-			"unitType", 
-			"unitVisibilityPremium",
-			"unitFloorPremium",
-			"unitValue",
-			"floorCost",
-			"floorValue",
-			"floorDelta"};
+			"_u_unitType", 
+			"_u_unitValue-base",
+			"_u_unitValue-total",
+			"_u_unitPremium-total",
+			"_u_unitPremium-visibility",
+			"_u_unitPremium-floor",
+			"_f_floorCost",
+			"_f_floorValue",
+			"_f_floorDelta"};
 		
 	SimpleIntegerProperty attributeIndex = new SimpleIntegerProperty(0);
 	
@@ -168,7 +170,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						
 						HSVColour c = new HSVColour() ;
 						
-						if (attribute != "unitType") {
+						if (attribute != "_u_unitType") {
 							
 							float value = analysisAttribute.getMappedValue(analysisUnit.getAttribute(attribute));						
 							c.setHSV((1-(value)) * 0.6f, 1f, 1f) ;		
@@ -188,7 +190,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							gl.glColor3f(0,0,0); 
 							gl.glLineWidth(0.2f);
 							
-							if (attribute == "unitType") {
+							if (attribute == "_u_unitType") {
 								
 								glut.glutStrokeString(0, analysisUnit.getUnitType());
 								

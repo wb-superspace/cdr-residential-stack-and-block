@@ -277,6 +277,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				}
 				
 				float maxUnitValue = -Float.MAX_VALUE;
+				float totalUnitValue = 0f;
 				float totalUnitCount = 0f;
 				float totalFloorCount = 0f;
 				
@@ -290,8 +291,10 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 								unitTypes.get(analysisUnit.getUnitType()).add(analysisUnit);
 								
-								if (analysisUnit.getAttribute("unitValue") > maxUnitValue) {
-									maxUnitValue = analysisUnit.getAttribute("unitValue");
+								totalUnitValue += analysisUnit.getAttribute("_u_unitValue-total");
+								
+								if (analysisUnit.getAttribute("_u_unitValue-total") > maxUnitValue) {
+									maxUnitValue = analysisUnit.getAttribute("_u_unitValue-total");
 								}
 								
 								totalUnitCount ++;
@@ -304,7 +307,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				
 				for (Map.Entry<String, List<AnalysisUnit>> unitType : unitTypes.entrySet()) {
 					
-					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(unitType.getValue(), "unitValue");
+					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(unitType.getValue(), "_u_unitValue-total");
 					
 					String color = application.sm.unitColors.get(unitType.getKey());
 					HEXColour c = new HEXColour(color);
@@ -317,7 +320,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 					float sum = analysisAttribute.getSum();
 					
 					float valuePerc = value / maxUnitValue;
-					float sumPerc = sum / application.se.value.get();
+					float sumPerc = sum / totalUnitValue;
 					float mixPerc = (float) count / (float) max;
 					
 					String typeLabel = unitType.getKey();
@@ -368,7 +371,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				
 				String attribute = application.attributes[application.attributeIndex.get()];
 				
-				if (attribute != "unitType") {
+				if (attribute != "_u_unitType") {
 																							
 					ObservableList<BarChartItem> legendItems = FXCollections.observableArrayList();
 										
@@ -376,7 +379,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 					
 					String unit = null;
 					
-					if (attribute.contains("floor")) {
+					if (attribute.contains("_f_")) {
 						
 						List<AnalysisFloor> analysisFloors = new ArrayList<>();
 						
@@ -440,8 +443,10 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 						legendItems.add(legendItem);
 					}
 					
+					String attributeLabel = attribute.split("_")[2];
+					
 					TitledPane legendTitledPane = new TitledPane();
-					legendTitledPane.setText(attribute + " : ");
+					legendTitledPane.setText(attributeLabel + " : ");
 					legendTitledPane.setAnimated(false);
 					legendTitledPane.setContent(new GridPaneBarChart<>(legendItems));
 					

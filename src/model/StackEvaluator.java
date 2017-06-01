@@ -1,5 +1,6 @@
 package model;
 
+import java.awt.datatransfer.FlavorTable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -13,25 +14,17 @@ import java.util.Stack;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.omg.CORBA.NamedValue;
 import org.sunflow.core.RayTracer;
 
-import com.jogamp.graph.font.Font;
-
 import cdr.geometry.primitives.Point3D;
-import cdr.geometry.primitives.Polygon3D;
 import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMesh;
 import cdr.mesh.toolkit.operators.MeshOperators;
-import cern.colt.list.adapter.FloatListAdapter;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleFloatProperty;
 import javafx.beans.property.SimpleIntegerProperty;
-import jdk.nashorn.internal.ir.Flags;
-import jogamp.graph.curve.tess.Loop;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
-import sun.net.www.content.text.plain;
 
 public class StackEvaluator {
 		
@@ -82,7 +75,7 @@ public class StackEvaluator {
 		
 				
 		for (AnalysisFloor analysisFloor: analysisStack) {
-			value += analysisFloor.getAttribute("floorDelta");
+			value += analysisFloor.getAttribute("_f_floorDelta");
 		}
 				
 		return value;
@@ -103,63 +96,108 @@ public class StackEvaluator {
 		float floorCost = 0f;
 		float floorValue = 0f;
 		
-		int floorIndex = analysisFloor.getFloorIndex()+1;
-		
-		for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
-			
-			String unitType = analysisUnit.getUnitType();
-			
-			float unitArea = analysisUnit.getArea(); 
-			float baseCost = sm.floorplateCostFloorMultiplier * floorIndex + sm.floorplateCostBase;
-			float unitCost = baseCost * unitArea;
-									
-			if (unitType != null) {
-				
-				float visibilityMultiplier = 0;
-				float visibilityTotal = 0;
-							
-				for (Point3D viewpoint : sm.getViewPoints()) {
-					for (Point3D analysisPoint : analysisUnit.getAnalysisPoints(false)) {
-						if(!rt.obstructed(rt.createRay(analysisPoint, viewpoint))) {
-							visibilityMultiplier++;
-						}
-						visibilityTotal++;
-					}
-				}
-									
-				float unitValue = sm.unitValues.get(unitType) * unitArea;
-				float unitCap = sm.unitCaps.containsKey(unitType) ? sm.unitCaps.get(unitType) : sm.unitCaps.get(null);
-					
-				float unitFloorPremium = unitValue * sm.unitPremiumFloorMultiplier * floorIndex;
-				float unitVisibilityPremium =  visibilityTotal != 0 ? unitValue * (visibilityMultiplier / visibilityTotal) / 10 : 0;
-				
-				unitValue += unitFloorPremium + unitVisibilityPremium;
-			
-				if (unitValue > unitCap) {
-					unitValue = unitCap;
-				}
-												
-				analysisUnit.addAttribute("unitValue", unitValue);
-				analysisUnit.addAttribute("unitVisibilityPremium", unitVisibilityPremium);
-				analysisUnit.addAttribute("unitFloorPremium", unitFloorPremium);
-				
-				floorCost += unitCost;
-				floorValue += unitValue;
-			} 
+		for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {				
+			floorCost += evaluateUnitCost(analysisUnit);
+			floorValue += evaluateUnitValue(analysisUnit);
 		}
-				
+					
 		for (AnalysisUnit analysisUnit: analysisFloor.getAnalysisUnits()) {
 			
-			analysisUnit.addAttribute("floorCost", floorCost);
-			analysisUnit.addAttribute("floorValue", floorValue);
-			analysisUnit.addAttribute("floorDelta", floorValue - floorCost);
+			analysisUnit.addAttribute("_f_floorCost", floorCost);
+			analysisUnit.addAttribute("_f_floorValue", floorValue);
+			analysisUnit.addAttribute("_f_floorDelta", floorValue - floorCost);
 			
-			analysisFloor.addAttribute("floorCost", floorCost);
-			analysisFloor.addAttribute("floorValue", floorValue);
-			analysisFloor.addAttribute("floorDelta", floorValue - floorCost);
+			analysisFloor.addAttribute("_f_floorCost", floorCost);
+			analysisFloor.addAttribute("_f_floorValue", floorValue);
+			analysisFloor.addAttribute("_f_floorDelta", floorValue - floorCost);
+		}
+				
+		floorHashes.put(floorHash, analysisFloor.clone());
+	}
+		
+	private float evaluateUnitValue(AnalysisUnit analysisUnit) {
+		
+		float unitValue = 0f;
+		
+		if (analysisUnit.getUnitType() != null) {
+											
+			float unitCap = sm.unitCaps.containsKey(analysisUnit.getUnitType())
+					? sm.unitCaps.get(analysisUnit.getUnitType())
+					: sm.unitCaps.get(null);
+				
+			float unitVisibilityPremium = evaluateUnitVisibilityPremium(analysisUnit);
+			float unitFloorPremium = evaluateUnitFloorPremium(analysisUnit);
+			
+			float unitPremiumTotal = unitFloorPremium + unitVisibilityPremium;	
+			
+			float unitValueBase = analysisUnit.getBaseValue();
+			float unitValueTotal = unitValueBase + unitPremiumTotal;
+		
+			if (unitValueTotal > unitCap) {
+				unitValueTotal = unitCap;
+			}
+											
+			analysisUnit.addAttribute("_u_unitValue-base", unitValueBase);
+			analysisUnit.addAttribute("_u_unitValue-total", unitValueTotal);
+			analysisUnit.addAttribute("_u_unitPremium-total", unitPremiumTotal);
+			analysisUnit.addAttribute("_u_unitPremium-visibility", unitVisibilityPremium);
+			analysisUnit.addAttribute("_u_unitPremium-floor", unitFloorPremium);
+			
+			unitValue = unitValueTotal;
+		} 
+				
+		return unitValue;
+	}
+	
+	private float evaluateUnitVisibilityPremium(AnalysisUnit analysisUnit) {
+		
+		float unitVisibilityPremium = 0f;
+		
+		float totalViewablePoints = 0f;
+		float totalViewedPoints = 0f;
+		
+		for (Point3D viewpoint : sm.getViewPoints()) {
+			for (Point3D analysisPoint : analysisUnit.getAnalysisPoints(false)) {
+				if(!rt.obstructed(rt.createRay(analysisPoint, viewpoint))) {
+					totalViewedPoints++;
+				}
+				totalViewablePoints++;
+			}
 		}
 		
-		floorHashes.put(floorHash, analysisFloor.clone());
+		if (totalViewablePoints == 0) return 0;
+			
+		float visibilityRatio = totalViewedPoints / totalViewablePoints;
+		float visibilityMultiplier = sm.unitPremiumVisibilityMultiplier * visibilityRatio;
+		float visibilityPremium = analysisUnit.getBaseValue() * visibilityMultiplier;
+		
+		unitVisibilityPremium = visibilityPremium;
+		
+		return unitVisibilityPremium;		
+	}
+	
+	private float evaluateUnitFloorPremium(AnalysisUnit analysisUnit) {
+		
+		float unitFloorPremium = 0f;
+		
+		float floorMultiplier = sm.unitPremiumFloorMultiplier * analysisUnit.getFloorIndex();
+		float floorPremium = analysisUnit.getBaseValue() * floorMultiplier;
+		
+		unitFloorPremium = floorPremium;
+	
+		return unitFloorPremium;
+	}
+	
+	private float evaluateUnitCost(AnalysisUnit analysisUnit) {
+		
+		float unitCost = 0f;
+		
+		float costMultiplier = sm.floorplateCostFloorMultiplier * analysisUnit.getFloorIndex();
+		float costTotal = analysisUnit.getBaseCost() * (costMultiplier + 1); 
+		
+		unitCost = costTotal;
+		
+		return unitCost;
 	}
 				
 	/*
@@ -306,8 +344,11 @@ public class StackEvaluator {
 							evaluateFloor(sAnalysisFloorClone);
 							evaluateFloor(tAnalysisFloorClone);
 							 
-							float vc = sAnalysisFloor.getAttribute("floorDelta") + tAnalysisFloor.getAttribute("floorDelta");
-							float vt = sAnalysisFloorClone.getAttribute("floorDelta") + tAnalysisFloorClone.getAttribute("floorDelta");
+							float vc = sAnalysisFloor.getAttribute("_f_floorDelta") +
+									tAnalysisFloor.getAttribute("_f_floorDelta");
+							
+							float vt = sAnalysisFloorClone.getAttribute("_f_floorDelta") +
+									tAnalysisFloorClone.getAttribute("_f_floorDelta");
 														
 							if (vc < vt) {
 								 
@@ -340,8 +381,8 @@ public class StackEvaluator {
 							
 							evaluateFloor(sAnalysisFloorClone);
 							
-							float vc = analysis.get(footprint).get(s).getAttribute("floorDelta");
-							float vt = sAnalysisFloorClone.getAttribute("floorDelta");
+							float vc = analysis.get(footprint).get(s).getAttribute("_f_floorDelta");
+							float vt = sAnalysisFloorClone.getAttribute("_f_floorDelta");
 							
 							if (vc < vt) {
 								
@@ -390,8 +431,11 @@ public class StackEvaluator {
 				i--;
 			}
 		}
+		
+		List<int[]> pointers = sm.getPointers();
+		Collections.shuffle(pointers);
 				
-		for (int[] pointer : sm.getPointers()) {
+		for (int[] pointer : pointers) {
 			
 			Point3D footprint = sm.getFootprints().get(pointer[0]);
 			
@@ -503,7 +547,7 @@ public class StackEvaluator {
 		int pool = 100;
 		int generation = 0;
 				
-		elite.put(evaluateStacks(this.analysis), sm.saveState());
+		elite.put(-Float.MAX_VALUE, sm.saveState());
 		
 		loop : do {
 						
@@ -514,7 +558,7 @@ public class StackEvaluator {
  			System.out.println(" ---> new front : " + front.size());	
  			 			
 			for (Map.Entry<Float, Map<Point3D, Stack<String>>> f : front.entrySet()) {
-				
+								
 				sm.restoreState(f.getValue());
 				
 				setAnalysisStacks();

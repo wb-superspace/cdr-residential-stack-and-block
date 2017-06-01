@@ -150,7 +150,9 @@ public class StackChart {
 		this.distributionValueAxis.setLowerBound(0);
 		this.distributionValueAxis.setUpperBound(1);
 		
-		this.valueSeries.getData().clear();
+		this.valueChart.getData().clear();
+		this.valueSeries = new XYChart.Series<>();	
+		this.valueChart.getData().add(valueSeries);
 		this.valueGenerationAxis.setCategories(FXCollections.observableArrayList());
 		this.valueValueAxis.setLowerBound(0);
 		this.valueValueAxis.setUpperBound(1);
@@ -178,10 +180,14 @@ public class StackChart {
 
 			value += v;
 		}
-				
+		
+		System.out.println(generation + " " + value);
+		
+			
 		if (value < minValue.get()) {
 			this.minValue.set(value);
 			this.valueValueAxis.setLowerBound(value);
+			this.distributionValueAxis.setLowerBound(value);
 		}
 	
 		if (value > maxValue.get()) {
@@ -189,7 +195,8 @@ public class StackChart {
 			this.valueValueAxis.setUpperBound(value);
 			this.distributionValueAxis.setUpperBound(value);
 		}
-				
+
+			
 		this.distributionGenerationAxis.getCategories().add(Integer.toString(generation));
 		this.valueGenerationAxis.getCategories().add(Integer.toString(generation));
 		
