@@ -30,9 +30,9 @@ public class StackManager {
 	
 	public float maxHeight = Float.MAX_VALUE; 
 	
-	public float floorplateCostBase = 3700f;							// (per m2) CTBUH
+	public float floorplateCostBase = 1650f;							// (per m2) CTBUH
 	
-	public float floorplateCostFloorMultiplier = 0.08f; 				// (8% every 10 floors) CTBUH
+	public float floorplateCostFloorMultiplier = 0.008f; 				// (8% every 10 floors) CTBUH
 	
 	public float unitPremiumFloorMultiplier = 0.015f; 					// AECOM (1.5% -> 2.2% (PH))
 	

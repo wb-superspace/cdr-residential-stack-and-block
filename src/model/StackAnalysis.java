@@ -1,6 +1,7 @@
 package model;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,7 @@ public class StackAnalysis {
 	 * =========================================================
 	 */
 	
-	public static AnalysisAttribute getAnalysisAttributeUnit(List<AnalysisUnit> analysisUnits, String attribute) {
+	public static AnalysisAttribute getAnalysisAttributeUnit(Collection<AnalysisUnit> analysisUnits, String attribute) {
 		
 		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
 		
@@ -41,7 +42,7 @@ public class StackAnalysis {
 		return analysisAttribute;
 	}
 	
-	public static AnalysisAttribute getAnalysisAttributeFloor(List<AnalysisFloor> analysisFloors, String attribute) {
+	public static AnalysisAttribute getAnalysisAttributeFloor(Collection<AnalysisFloor> analysisFloors, String attribute) {
 		
 		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
 		

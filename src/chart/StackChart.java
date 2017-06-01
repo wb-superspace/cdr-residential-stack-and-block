@@ -18,6 +18,7 @@ import javafx.scene.chart.StackedBarChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.chart.XYChart.Data;
 import model.StackAnalysis;
+import model.StackAnalysis.AnalysisAttribute;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackEvaluator;
 import model.StackManager;
@@ -173,23 +174,19 @@ public class StackChart {
 				distributionSeries.put(analysisEntry.getKey(), new XYChart.Series<>());
 				distributionChart.getData().add(distributionSeries.get(analysisEntry.getKey()));
 			}
-			
-			float v = StackEvaluator.evaluateStack(analysisEntry.getValue());
+						
+			float v = StackAnalysis.getAnalysisAttributeFloor(analysisEntry.getValue(), "_f_floorDelta").getSum();
 			this.distributionSeries.get(analysisEntry.getKey()).getData()
 				.add(new Data<String, Number>(Integer.toString(generation), v));
 
 			value += v;
-		}
-		
-		System.out.println(generation + " " + value);
-		
+		}		
 			
 		if (value < minValue.get()) {
 			this.minValue.set(value);
 			this.valueValueAxis.setLowerBound(value);
-			this.distributionValueAxis.setLowerBound(value);
 		}
-	
+		
 		if (value > maxValue.get()) {
 			this.maxValue.set(value);
 			this.valueValueAxis.setUpperBound(value);

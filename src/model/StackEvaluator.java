@@ -1,6 +1,5 @@
 package model;
 
-import java.awt.datatransfer.FlavorTable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,27 +57,15 @@ public class StackEvaluator {
 	 * =========================================================
 	 */
 	
-	public static float evaluateStacks(Map<Point3D, Stack<AnalysisFloor>> analysisStacks) {
+	private float evaluateDelta(Map<Point3D, Stack<AnalysisFloor>> analysisStacks) {
 		
-		float value = 0;
+		float delta = 0;
 		
 		for (Stack<AnalysisFloor> analysisStack: analysisStacks.values()) {
-			value += evaluateStack(analysisStack);
+			delta += StackAnalysis.getAnalysisAttributeFloor(analysisStack, "_f_floorDelta").getSum();
 		}
-		
-		return value;
-	}
-			
-	public static float evaluateStack(Stack<AnalysisFloor> analysisStack) {
-		
-		float value = 0;
-		
-				
-		for (AnalysisFloor analysisFloor: analysisStack) {
-			value += analysisFloor.getAttribute("_f_floorDelta");
-		}
-				
-		return value;
+
+		return delta;
 	}
 		
 	private void evaluateFloor(AnalysisFloor analysisFloor) {
@@ -510,7 +497,7 @@ public class StackEvaluator {
 		
 		setAnalysisStacks();		
 		
-		this.value.set(evaluateStacks(this.analysis));
+		this.value.set(evaluateDelta(this.analysis));
 		
 		for (String unitType : sm.getUnitTypes()) {
 			this.counts.put(unitType, sm.getUnitCount(unitType));
@@ -523,7 +510,7 @@ public class StackEvaluator {
 				
 		if (generation != 0) {
 			
-			this.value.set(evaluateStacks(this.analysis));
+			this.value.set(evaluateDelta(this.analysis));
 			
 			for (String unitType : sm.getUnitTypes()) {
 				this.counts.put(unitType, sm.getUnitCount(unitType));
@@ -580,7 +567,7 @@ public class StackEvaluator {
 										
 					mutateStackFloors();							
 											
-					float delta = evaluateStacks(this.analysis);
+					float delta = evaluateDelta(this.analysis);
 					
 					if (delta > f.getKey()) {					
 						elite.put(delta, sm.saveState());	
@@ -633,7 +620,7 @@ public class StackEvaluator {
 		System.out.println();
 		System.out.println();
 		System.out.println("total area: " +sm.getStackArea() + " / " + sm.maxArea);
-		System.out.println("total delta: " + evaluateStacks(this.analysis));
+		System.out.println("total delta: " + evaluateDelta(this.analysis));
 		System.out.println();
 		for (String unitType : sm.getUnitTypes()) {
 			System.out.println(unitType + " : " + sm.getUnitCount(unitType) + " / " + sm.unitCounts.get(unitType));
