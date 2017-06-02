@@ -62,7 +62,9 @@ public class StackEvaluator {
 		float delta = 0;
 		
 		for (Stack<AnalysisFloor> analysisStack: analysisStacks.values()) {
-			delta += StackAnalysis.getAnalysisAttributeFloor(analysisStack, "_f_floorDelta").getSum();
+			for (AnalysisFloor analysisFloor : analysisStack) {
+				delta += StackAnalysis.getAnalysisAttribute(analysisFloor.getAnalysisUnits(), "unitDelta-total").getSum();
+			}
 		}
 
 		return delta;
@@ -80,31 +82,24 @@ public class StackEvaluator {
 			return;
 		}
 		
-		float floorCost = 0f;
-		float floorValue = 0f;
-		
-		for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {				
-			floorCost += evaluateUnitCost(analysisUnit);
-			floorValue += evaluateUnitValue(analysisUnit);
-		}
-					
-		for (AnalysisUnit analysisUnit: analysisFloor.getAnalysisUnits()) {
+		for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
 			
-			analysisUnit.addAttribute("_f_floorCost", floorCost);
-			analysisUnit.addAttribute("_f_floorValue", floorValue);
-			analysisUnit.addAttribute("_f_floorDelta", floorValue - floorCost);
+			float unitArea = analysisUnit.getArea();
+			float unitCost = evaluateUnitCost(analysisUnit);
+			float unitValue = evaluateUnitValue(analysisUnit);
+			float unitDelta = unitValue - unitCost;
 			
-			analysisFloor.addAttribute("_f_floorCost", floorCost);
-			analysisFloor.addAttribute("_f_floorValue", floorValue);
-			analysisFloor.addAttribute("_f_floorDelta", floorValue - floorCost);
+			analysisUnit.addAttribute("unitDelta-total", unitDelta);
+			analysisUnit.addAttribute("unitDelta-m2", unitDelta / unitArea);
 		}
-				
+									
 		floorHashes.put(floorHash, analysisFloor.clone());
 	}
 		
 	private float evaluateUnitValue(AnalysisUnit analysisUnit) {
 		
 		float unitValue = 0f;
+		float unitArea = analysisUnit.getArea();
 		
 		if (analysisUnit.getUnitType() != null) {
 											
@@ -115,25 +110,44 @@ public class StackEvaluator {
 			float unitVisibilityPremium = evaluateUnitVisibilityPremium(analysisUnit);
 			float unitFloorPremium = evaluateUnitFloorPremium(analysisUnit);
 			
-			float unitPremiumTotal = unitFloorPremium + unitVisibilityPremium;	
-			
+			float unitValuePremium = unitFloorPremium + unitVisibilityPremium;	
 			float unitValueBase = analysisUnit.getBaseValue();
-			float unitValueTotal = unitValueBase + unitPremiumTotal;
+			float unitValueTotal = unitValueBase + unitValuePremium;
 		
 			if (unitValueTotal > unitCap) {
 				unitValueTotal = unitCap;
 			}
 											
-			analysisUnit.addAttribute("_u_unitValue-base", unitValueBase);
-			analysisUnit.addAttribute("_u_unitValue-total", unitValueTotal);
-			analysisUnit.addAttribute("_u_unitPremium-total", unitPremiumTotal);
-			analysisUnit.addAttribute("_u_unitPremium-visibility", unitVisibilityPremium);
-			analysisUnit.addAttribute("_u_unitPremium-floor", unitFloorPremium);
+			analysisUnit.addAttribute("unitValue-base", unitValueBase);
+			analysisUnit.addAttribute("unitValue-premium", unitValuePremium);
+			analysisUnit.addAttribute("unitValue-total", unitValueTotal);
+			analysisUnit.addAttribute("unitValue-m2", unitValueTotal / unitArea);
+
+			analysisUnit.addAttribute("unitPremium-visibility", unitVisibilityPremium);
+			analysisUnit.addAttribute("unitPremium-floor", unitFloorPremium);
 			
 			unitValue = unitValueTotal;
 		} 
 				
 		return unitValue;
+	}
+	
+	private float evaluateUnitCost(AnalysisUnit analysisUnit) {
+		
+		float unitCost = 0f;
+		float unitArea = analysisUnit.getArea();
+		
+		float unitCostBase = analysisUnit.getBaseCost();
+		float unitCostMultiplier = sm.floorplateCostFloorMultiplier * analysisUnit.getFloorIndex();
+		float unitCostTotal =  unitCostBase * (unitCostMultiplier + 1); 
+		
+		analysisUnit.addAttribute("unitCost-base", unitCostBase);
+		analysisUnit.addAttribute("unitCost-total", unitCostTotal);
+		analysisUnit.addAttribute("unitCost-m2", unitCostTotal / unitArea);
+		
+		unitCost = unitCostTotal;
+				
+		return unitCost;
 	}
 	
 	private float evaluateUnitVisibilityPremium(AnalysisUnit analysisUnit) {
@@ -173,18 +187,6 @@ public class StackEvaluator {
 		unitFloorPremium = floorPremium;
 	
 		return unitFloorPremium;
-	}
-	
-	private float evaluateUnitCost(AnalysisUnit analysisUnit) {
-		
-		float unitCost = 0f;
-		
-		float costMultiplier = sm.floorplateCostFloorMultiplier * analysisUnit.getFloorIndex();
-		float costTotal = analysisUnit.getBaseCost() * (costMultiplier + 1); 
-		
-		unitCost = costTotal;
-		
-		return unitCost;
 	}
 				
 	/*
@@ -330,12 +332,15 @@ public class StackEvaluator {
 							 
 							evaluateFloor(sAnalysisFloorClone);
 							evaluateFloor(tAnalysisFloorClone);
-							 
-							float vc = sAnalysisFloor.getAttribute("_f_floorDelta") +
-									tAnalysisFloor.getAttribute("_f_floorDelta");
 							
-							float vt = sAnalysisFloorClone.getAttribute("_f_floorDelta") +
-									tAnalysisFloorClone.getAttribute("_f_floorDelta");
+							List<AnalysisUnit> cAnalysisUnits = new ArrayList<>(sAnalysisFloor.getAnalysisUnits());
+							cAnalysisUnits.addAll(tAnalysisFloor.getAnalysisUnits());
+							
+							List<AnalysisUnit> tAnalysisUnits = new ArrayList<>(sAnalysisFloorClone.getAnalysisUnits());
+							tAnalysisUnits.addAll(tAnalysisFloorClone.getAnalysisUnits());
+							 
+							float vc = StackAnalysis.getAnalysisAttribute(cAnalysisUnits, "unitDelta-total").getSum();
+							float vt =  StackAnalysis.getAnalysisAttribute(tAnalysisUnits, "unitDelta-total").getSum();
 														
 							if (vc < vt) {
 								 
@@ -362,14 +367,17 @@ public class StackEvaluator {
 						
 						if (iterableType != sm.getStack(footprint).get(s)) {
 							
-							AnalysisFloor sAnalysisFloorClone = analysis.get(footprint).get(s).clone();
+							AnalysisFloor sAnalysisFloor = analysis.get(footprint).get(s);
+							AnalysisFloor sAnalysisFloorClone = sAnalysisFloor.clone();
 							
 							sAnalysisFloorClone.setFloorPlate(sm.getFloorplate(sm.getFootprintType(footprint), iterableType));
 							
 							evaluateFloor(sAnalysisFloorClone);
 							
-							float vc = analysis.get(footprint).get(s).getAttribute("_f_floorDelta");
-							float vt = sAnalysisFloorClone.getAttribute("_f_floorDelta");
+							float vc = StackAnalysis.getAnalysisAttribute(
+									sAnalysisFloor.getAnalysisUnits(), "unitDelta-total").getSum();
+							float vt = StackAnalysis.getAnalysisAttribute(
+									sAnalysisFloorClone.getAnalysisUnits(), "unitDelta-total").getSum();
 							
 							if (vc < vt) {
 								

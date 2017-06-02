@@ -56,14 +56,15 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	public TitledPane performanceTitledPane;
 	public TitledPane stackTitledPane;
-	public TitledPane unitMixTitledPane;
-	public TitledPane avgTitledPane;
-	public TitledPane totalTitledPane;
+	public TitledPane unitsTitledPane;
+	public TitledPane valueTitledPane;
 	public TitledPane legendTitledPane;
 
-	public TitledPane chartTitledPane;
-
-	public VBox chartVBox;
+	public VBox distributionChartVBox;
+	public TitledPane distributionTitledPane;
+	
+	public VBox generationsChartVBox;
+	public TitledPane generationsChartTitledPane;
 	
 	public MenuItem importGeometryMenuItem;
 	public MenuItem importUnitMixMenuItem;
@@ -181,7 +182,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				fc.setSelectedExtensionFilter(csvExtensionFilter);
 				File file = fc.showSaveDialog(null);
 
-				application.exportImage(file, chartVBox.getScene().getRoot());
+				application.exportImage(file, generationsChartVBox.getScene().getRoot());
 			}
 		});
 		
@@ -191,7 +192,7 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 			public void handle(ActionEvent event) {
 				application.start();
 				performanceTitledPane.setExpanded(true);
-				chartTitledPane.setExpanded(true);
+				generationsChartTitledPane.setExpanded(true);
 			}
 		});
 		
@@ -214,21 +215,29 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 	
 	private void initializeCharts() {
 		
-		chartVBox.setStyle("-fx-background-color: white;");
+		generationsChartVBox.setStyle("-fx-background-color: white;");
 		
-		Chart distributionChart = application.sc.getDistributionChart();
+		Chart stacksChart = application.sc.getStacksChart();
 	
-		distributionChart.setPrefHeight(100);
-		distributionChart.prefWidthProperty().bind(chartVBox.widthProperty().multiply(0.95f));
+		stacksChart.setPrefHeight(100);
+		stacksChart.prefWidthProperty().bind(generationsChartVBox.widthProperty().multiply(0.95f));
 		
 		Chart valueChart = application.sc.getValueChart();
 		
 		valueChart.setPrefHeight(100);
-		valueChart.prefWidthProperty().bind(chartVBox.widthProperty().multiply(0.95f));
+		valueChart.prefWidthProperty().bind(generationsChartVBox.widthProperty().multiply(0.95f));
 		
-		chartVBox.getChildren().clear();
-		chartVBox.getChildren().add(valueChart);
-		chartVBox.getChildren().add(distributionChart);
+		Chart scatterChart = application.sd.getScatterChart();
+		
+		scatterChart.setPrefHeight(200);
+		scatterChart.setMaxHeight(400);
+		
+		generationsChartVBox.getChildren().clear();
+		generationsChartVBox.getChildren().add(valueChart);
+		generationsChartVBox.getChildren().add(stacksChart);
+		
+		distributionChartVBox.getChildren().clear();
+		distributionChartVBox.getChildren().add(scatterChart);
 	}
 	
 	private void initializeTitledPanes() {
@@ -270,16 +279,14 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				}
 				
 				stackTitledPane.setVisible(true);
-				unitMixTitledPane.setVisible(true);
-				avgTitledPane.setVisible(true);
-				totalTitledPane.setVisible(true);
+				unitsTitledPane.setVisible(true);
+				valueTitledPane.setVisible(true);
 												
 				Map<Point3D, Stack<AnalysisFloor>> analysisStacks = application.se.getAnalysisStacks();
 					
-				ObservableList<BarChartItem> unitValueItems = FXCollections.observableArrayList();
-				ObservableList<BarChartItem> unitSumItems = FXCollections.observableArrayList();
-				ObservableList<BarChartItem> unitMixItems = FXCollections.observableArrayList();
 				ObservableList<BarChartItem> stackItems = FXCollections.observableArrayList();
+				ObservableList<BarChartItem> unitsItems = FXCollections.observableArrayList();
+				ObservableList<BarChartItem> valueItems = FXCollections.observableArrayList();
 				
 				Map<String, List<AnalysisUnit>> unitTypes = new HashMap<>();
 				
@@ -292,7 +299,6 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 				float totalArea = 0f;
 				float totalCost = 0f;
 				float totalUnitCount = 0f;
-				float totalFloorCount = 0f;
 				
 				for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
 					for (AnalysisFloor analysisFloor : analysisStack) {
@@ -304,43 +310,40 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 
 								unitTypes.get(analysisUnit.getUnitType()).add(analysisUnit);
 								
-								totalValue += analysisUnit.getAttribute("_u_unitValue-total");
+								totalValue += analysisUnit.getAttribute("unitValue-total");
 								totalArea += analysisUnit.getArea();
+								totalCost += analysisUnit.getAttribute("unitCost-total");
 								
-								if (analysisUnit.getAttribute("_u_unitValue-total") > maxUnitValue) {
-									maxUnitValue = analysisUnit.getAttribute("_u_unitValue-total");
+								if (analysisUnit.getAttribute("unitValue-total") > maxUnitValue) {
+									maxUnitValue = analysisUnit.getAttribute("unitValue-total");
 								}
 								
 								totalUnitCount ++;
 							}
 						}
-						
-						totalCost += analysisFloor.getAttribute("_f_floorCost");
-						
-						totalFloorCount ++;
 					}
 				}
 				
 				float totalProfit = totalValue - totalCost;
 						
 				stackItems.add(new BarChartItem("AREA", (int)totalArea + "m2", new float[]{0,0,0}, 0, 50, 10));
-				stackItems.add(new BarChartItem("UNITS", (int)totalUnitCount +"" , new float[]{0,0,0}, 0, 50, 10));
+				stackItems.add(new BarChartItem("UNITS", (int)totalUnitCount +"" , new float[]{0,0,0}, 0, 50, 10));			
 				stackItems.add(new BarChartItem("VALUE", formatToValue(totalValue) + " \t [" +
 						formatToValue(totalValue / totalUnitCount)  + "/unit - " +
 						formatToValue(totalValue / totalArea) + "/m2]", new float[]{0,0,0}, 0, 50, 10));
 				stackItems.add(new BarChartItem("COST", formatToValue(totalCost) + " \t [" +
 						formatToValue(totalCost / totalUnitCount)  + "/unit - " +
 						formatToValue(totalCost / totalArea) + "/m2]", new float[]{0,0,0}, 0, 50, 10));
+				
 				stackItems.add(new BarChartItem("PROFIT", formatToValue(totalProfit) + " \t [" +
 						formatToValue(totalProfit / totalUnitCount)  + "/unit - " +
 						formatToValue(totalProfit / totalArea) + "/m2]", new float[]{0,0,0}, 0, 50, 10));
-
-				
+						
 				stackTitledPane.setContent(new GridPaneBarChart<>(stackItems));
 				
 				for (Map.Entry<String, List<AnalysisUnit>> unitType : unitTypes.entrySet()) {
 					
-					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(unitType.getValue(), "_u_unitValue-total");
+					AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttribute(unitType.getValue(), "unitValue-total");
 					
 					String color = application.sm.unitColors.get(unitType.getKey());
 					HEXColour c = new HEXColour(color);
@@ -348,87 +351,67 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 					int count = application.se.counts.get(unitType.getKey());
 					int max =  application.sm.unitCounts.get(unitType.getKey());
 					
+					float area = 0f;
+					
+					for (AnalysisUnit analysisUnit : unitType.getValue()) {
+						area += analysisUnit.getArea();
+					}
+					
 					float[] col = new float[]{c.red(), c.green(), c.blue()};
 					float value = analysisAttribute.getMean();
 					float sum = analysisAttribute.getSum();
 					
-					float valuePerc = value / maxUnitValue;
 					float sumPerc = sum / totalValue;
-					float mixPerc = (float) count / (float) max;
 					
 					String typeLabel = unitType.getKey();
 					String typeCount = "[" + count + " | " + max + "]";
-					String valueLabel = formatToValue(value);
-					String sumLabel = formatToValue(sum);
-					
-					BarChartItem sumItem = new BarChartItem(typeLabel, sumLabel, col, sumPerc, 100, 10);
-					BarChartItem valueItem = new BarChartItem(typeLabel, valueLabel, col, valuePerc, 100, 10);
-					BarChartItem mixItem = new BarChartItem(typeLabel, typeCount, col, 0.2f, 100, 10);
+							
+					BarChartItem valueItem = new BarChartItem(typeLabel, formatToValue(sum), col, sumPerc, 100, 10);
+					BarChartItem mixItem = new BarChartItem(typeLabel, typeCount, col, 0.1f, 100, 10);
 															
-					sumItem.getBeforeBarLabel().setPrefWidth(150);
-					sumItem.getAfterBarLabel().setPrefWidth(100);
-					
 					valueItem.getBeforeBarLabel().setPrefWidth(150);
-					valueItem.getAfterBarLabel().setPrefWidth(100);
-					
+										
 					mixItem.getBeforeBarLabel().setPrefWidth(150);
 					mixItem.getAfterBarLabel().setPrefWidth(100);
+								
+					valueItems.add(valueItem);					
+					unitsItems.add(mixItem);
 					
-					unitValueItems.add(valueItem);
-					unitSumItems.add(sumItem);
-					unitMixItems.add(mixItem);
 				}
+								
+				unitsTitledPane.setText("units : ");
+				unitsTitledPane.setContent(new GridPaneBarChart<>(unitsItems));
 				
-				unitMixTitledPane.setText("unitMix : ");
-				unitMixTitledPane.setAnimated(false);
-				unitMixTitledPane.setContent(new GridPaneBarChart<>(unitMixItems));
+				valueTitledPane.setText("value : ");
+				valueTitledPane.setContent(new GridPaneBarChart<>(valueItems));
 				
-				avgTitledPane.setText("unitValue [avg] : ");
-				avgTitledPane.setAnimated(false);
-				avgTitledPane.setContent(new GridPaneBarChart<>(unitValueItems));
-
-				totalTitledPane.setText("stackValue [total] : ");
-				totalTitledPane.setAnimated(false);
-				totalTitledPane.setContent(new GridPaneBarChart<>(unitSumItems));
+				/*
+				 * Legend
+				 */
 				
 				String attribute = application.attributes[application.attributeIndex.get()];
 				
-				if (attribute != "_u_unitType") {
+				if (attribute != "unitType") {
 					
+					distributionTitledPane.setVisible(true);
 					legendTitledPane.setVisible(true);
 					
 					ObservableList<BarChartItem> legendItems = FXCollections.observableArrayList();
 										
 					AnalysisAttribute analysisAttribute;
 					
-					String unit = null;
+
+											
+					List<AnalysisUnit> analysisUnits = new ArrayList<>();
 					
-					if (attribute.contains("_f_")) {
-						
-						List<AnalysisFloor> analysisFloors = new ArrayList<>();
-						
-						for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
-							analysisFloors.addAll(analysisStack);
+					for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
+						for (AnalysisFloor analysisFloor : analysisStack) {
+							analysisUnits.addAll(analysisFloor.getAnalysisUnits());
 						}
-						
-						analysisAttribute = StackAnalysis.getAnalysisAttributeFloor(analysisFloors, attribute);
-						
-						unit = "floors";
-						
-					} else { 
-						
-						List<AnalysisUnit> analysisUnits = new ArrayList<>();
-						
-						for (Stack<AnalysisFloor> analysisStack : analysisStacks.values()) {
-							for (AnalysisFloor analysisFloor : analysisStack) {
-								analysisUnits.addAll(analysisFloor.getAnalysisUnits());
-							}
-						}
-						
-						analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(analysisUnits, attribute);
-						
-						unit = "units";
 					}
+					
+					analysisAttribute = StackAnalysis.getAnalysisAttribute(analysisUnits, attribute);
+										
 					
 					Map<Float, List<Float>> bins = analysisAttribute.getBinValues(10);
 					
@@ -447,34 +430,26 @@ public class ResidentialStackingMain  extends JavaFXGUI<ResidentialStackingRende
 						float perc = 0;
 						
 						String valueLabel = formatToValue(value);
-						String countLabel = items.size() + " " + unit;
+						String countLabel = items.size() + " units";
 						
 						if (i != values.size() -1) {
 							valueLabel += " - " + formatToValue(values.get(i+1) - 1);
 						}
 						
-						if (unit == "floors") {
-							perc = (float) items.size() / (float) totalFloorCount;
-						} else {
-							perc = (float) items.size() / (float) totalUnitCount;
-						}
-						
-						perc += 0.01;
-						
+						perc = ((float) items.size() / (float) totalUnitCount ) + 0.01f;
+
 						BarChartItem legendItem = new BarChartItem(valueLabel, countLabel, col, perc, 100, 10);		
 						legendItem.getBeforeBarLabel().setPrefWidth(150);
 						legendItem.getAfterBarLabel().setPrefWidth(100);
 						legendItems.add(legendItem);
 					}
-					
-					String attributeLabel = attribute.split("_")[2];
-					
-					legendTitledPane.setText(attributeLabel + " : ");
-					legendTitledPane.setAnimated(false);
+										
+					legendTitledPane.setText("legend : ["+ attribute + "]");
 					legendTitledPane.setContent(new GridPaneBarChart<>(legendItems));
 				
 				} else {
 					
+					distributionTitledPane.setVisible(false);
 					legendTitledPane.setVisible(false);
 				}
 			}

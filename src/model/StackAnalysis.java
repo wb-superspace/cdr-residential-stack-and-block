@@ -9,8 +9,6 @@ import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
 
-import com.sun.corba.se.spi.orb.StringPair;
-
 import cdr.geometry.primitives.ArrayPoint3D;
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.Point3D;
@@ -29,7 +27,7 @@ public class StackAnalysis {
 	 * =========================================================
 	 */
 	
-	public static AnalysisAttribute getAnalysisAttributeUnit(Collection<AnalysisUnit> analysisUnits, String attribute) {
+	public static AnalysisAttribute getAnalysisAttribute(Collection<AnalysisUnit> analysisUnits, String attribute) {
 		
 		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
 		
@@ -37,17 +35,6 @@ public class StackAnalysis {
 			if (analysisUnit.getUnitType() != null) {
 				analysisAttribute.addValue(analysisUnit.getAttribute(attribute));
 			}
-		}
-		
-		return analysisAttribute;
-	}
-	
-	public static AnalysisAttribute getAnalysisAttributeFloor(Collection<AnalysisFloor> analysisFloors, String attribute) {
-		
-		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
-		
-		for (AnalysisFloor analysisFloor : analysisFloors) {
-			analysisAttribute.addValue(analysisFloor.getAttribute(attribute));
 		}
 		
 		return analysisAttribute;
@@ -255,9 +242,7 @@ public class StackAnalysis {
 		private int floorIndex;
 		
 		private List<AnalysisUnit> analysisUnits;
-		
-		private Map<String, Float> attributes;
-		
+				
 		public AnalysisFloor(StackManager sm, Point3D footprint, Point3D floorplate, int floorIndex) {
 			
 			this.sm = sm;
@@ -265,7 +250,6 @@ public class StackAnalysis {
 			this.floorplate = floorplate;
 			this.floorIndex = floorIndex;
 				
-			this.attributes = new HashMap<>();
 			this.setAnalysisUnits();
 		}
 		
@@ -279,7 +263,6 @@ public class StackAnalysis {
 		
 		public void copy(AnalysisFloor other) {
 			
-			this.attributes = new HashMap<>(other.attributes);
 			this.analysisUnits = new ArrayList<>();
 			
 			for (AnalysisUnit analysisUnit : other.analysisUnits) {
@@ -319,15 +302,7 @@ public class StackAnalysis {
 				this.analysisUnits.add(this.new AnalysisUnit(unit));
 			}
 		}
-		
-		public void addAttribute(String attribute, float value) {
-			this.attributes.put(attribute, value);
-		}
-
-		public float getAttribute(String attribute) {
-			return this.attributes.containsKey(attribute) ? this.attributes.get(attribute) : 0f;
-		}
-		
+				
 		public Point3D getFootprint() {
 			return this.footprint;
 		}

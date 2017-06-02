@@ -1,11 +1,14 @@
 package chart;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.Stack;
 import java.util.TreeMap;
 
+import cdr.colour.HEXColour;
 import cdr.geometry.primitives.Point3D;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleFloatProperty;
@@ -14,16 +17,19 @@ import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.StackedBarChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.chart.XYChart.Data;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import model.StackAnalysis;
-import model.StackAnalysis.AnalysisAttribute;
 import model.StackAnalysis.AnalysisFloor;
+import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
 import model.StackEvaluator;
 import model.StackManager;
 
-public class StackChart {
+public class StackGenerationChart {
 	
 	private final StackManager sm;
 	private final StackEvaluator se;
@@ -62,7 +68,7 @@ public class StackChart {
 	private SimpleFloatProperty maxValue = new SimpleFloatProperty(-Float.MAX_VALUE);
 	
 
-	public StackChart(StackManager sm, StackEvaluator se) {
+	public StackGenerationChart(StackManager sm, StackEvaluator se) {
 		
 		this.sm = sm;
 		this.se = se;
@@ -95,7 +101,7 @@ public class StackChart {
 		this.valueChart.setStyle("CHART_COLOR_1: #899bb7;");
 		
 		this.valueSeries = new XYChart.Series<>();	
-		this.valueChart.getData().add(valueSeries);
+		this.valueChart.getData().add(valueSeries);	
 			
 		/*
 		 * =========================================================
@@ -125,7 +131,7 @@ public class StackChart {
 					@Override
 					public void run() {		
 						if (oldValue.intValue() < newValue.intValue()) {
-							addValues(StackChart.this.se.getAnalysisStacks(), (int) newValue);
+							addValues(StackGenerationChart.this.se.getAnalysisStacks(), (int) newValue);
 						}
 					}
 				});
@@ -135,14 +141,14 @@ public class StackChart {
 		clearCharts();
 	}
 	
-	public StackedBarChart<String, Number> getDistributionChart() {
+	public StackedBarChart<String, Number> getStacksChart() {
 		return this.distributionChart;
 	}
 	
 	public StackedBarChart<String, Number> getValueChart() {
 		return this.valueChart;
 	}
-		
+			
 	public void clearCharts() {
 					
 		this.distributionSeries.clear();
@@ -156,7 +162,7 @@ public class StackChart {
 		this.valueChart.getData().add(valueSeries);
 		this.valueGenerationAxis.setCategories(FXCollections.observableArrayList());
 		this.valueValueAxis.setLowerBound(0);
-		this.valueValueAxis.setUpperBound(1);
+		this.valueValueAxis.setUpperBound(1);		
 		
 		this.generations = new TreeMap<>();
 		
@@ -174,14 +180,24 @@ public class StackChart {
 				distributionSeries.put(analysisEntry.getKey(), new XYChart.Series<>());
 				distributionChart.getData().add(distributionSeries.get(analysisEntry.getKey()));
 			}
+			
+			List<AnalysisUnit> analysisUnits = new ArrayList<>();
+			for (AnalysisFloor analysisFloor : analysisEntry.getValue()) {			
+				for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
+					
+					if (analysisUnit.getUnitType() != null) {						
+						analysisUnits.add(analysisUnit);
+					}
+				}
+			}
 						
-			float v = StackAnalysis.getAnalysisAttributeFloor(analysisEntry.getValue(), "_f_floorDelta").getSum();
+			float v = StackAnalysis.getAnalysisAttribute(analysisUnits, "unitDelta-total").getSum();
 			this.distributionSeries.get(analysisEntry.getKey()).getData()
 				.add(new Data<String, Number>(Integer.toString(generation), v));
 
 			value += v;
 		}		
-			
+					
 		if (value < minValue.get()) {
 			this.minValue.set(value);
 			this.valueValueAxis.setLowerBound(value);

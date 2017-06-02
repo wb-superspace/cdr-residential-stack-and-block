@@ -36,7 +36,8 @@ import cdr.mesh.datastructure.Mesh3D;
 import cdr.mesh.datastructure.fvMesh.FVMeshFactory;
 import cdr.mesh.renderer.MeshRenderer3DOutline;
 import cdr.mesh.toolkit.operators.MeshOperators;
-import chart.StackChart;
+import chart.StackDistributionChart;
+import chart.StackGenerationChart;
 import fileio.CsvReader;
 import fileio.FileDialogs;
 import javafx.beans.property.SimpleIntegerProperty;
@@ -59,7 +60,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	
 	StackManager sm;
 	StackEvaluator se;
-	StackChart sc;	
+	StackGenerationChart sc;	
+	StackDistributionChart sd;
 	
 	/*
 	 * =========================================================
@@ -68,15 +70,25 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 	 */
 	
 	String[] attributes = new String[] {
-			"_u_unitType", 
-			"_u_unitValue-base",
-			"_u_unitValue-total",
-			"_u_unitPremium-total",
-			"_u_unitPremium-visibility",
-			"_u_unitPremium-floor",
-			"_f_floorCost",
-			"_f_floorValue",
-			"_f_floorDelta"};
+			
+			"unitType", 
+			
+			"unitValue-base",
+			"unitValue-premium",
+			"unitValue-total",
+			"unitValue-m2",
+			
+			"unitPremium-visibility",
+			"unitPremium-floor",
+			
+			"unitCost-base",
+			"unitCost-total",
+			"unitCost-m2",
+			
+			"unitDelta-total",
+			"unitDelta-m2"
+			
+	};
 		
 	SimpleIntegerProperty attributeIndex = new SimpleIntegerProperty(0);
 	
@@ -113,6 +125,10 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					if (attributeIndex.get() == attributes.length-1)	attributeIndex.set(0);
 					else attributeIndex.set(attributeIndex.get()+1);;		
 					
+					if (se != null && sm != null) {
+						sd.setAttribute(attributes[attributeIndex.get()]);
+					}
+					
 					System.out.println(attributes[attributeIndex.get()]);
 				}
 				
@@ -120,6 +136,10 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					
 					if (attributeIndex.get() == 0) attributeIndex.set(attributes.length-1);
 					else attributeIndex.set(attributeIndex.get()-1);;		
+					
+					if (se != null && sm != null) {
+						sd.setAttribute(attributes[attributeIndex.get()]);
+					}
 					
 					System.out.println(attributes[attributeIndex.get()]);
 				}
@@ -152,7 +172,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 				}
 			}
 			
-			AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttributeUnit(analysisUnits, attribute);
+			AnalysisAttribute analysisAttribute = StackAnalysis.getAnalysisAttribute(analysisUnits, attribute);
 			
 			for (Point3D footprint : analysisStacks.keySet()) {
 				
@@ -170,7 +190,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 						
 						HSVColour c = new HSVColour() ;
 						
-						if (attribute != "_u_unitType") {
+						if (attribute != "unitType") {
 							
 							float value = analysisAttribute.getMappedValue(analysisUnit.getAttribute(attribute));						
 							c.setHSV((1-(value)) * 0.6f, 1f, 1f) ;		
@@ -190,7 +210,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 							gl.glColor3f(0,0,0); 
 							gl.glLineWidth(0.2f);
 							
-							if (attribute == "_u_unitType") {
+							if (attribute == "unitType") {
 								
 								glut.glutStrokeString(0, analysisUnit.getUnitType());
 								
@@ -308,6 +328,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		sm.clearStacks();
 		se.clearEvaluations();
 		sc.clearCharts();
+		sd.clearCharts();
 		
 		new Thread(new Runnable() {
 		    public void run() {
@@ -327,7 +348,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					
 		sm = new StackManager();
 		se = new StackEvaluator(sm);
-		sc = new StackChart(sm, se);
+		sc = new StackGenerationChart(sm, se);
+		sd = new StackDistributionChart(sm, se, attributes[attributeIndex.get()]);
 
 		File file = FileDialogs.openFileFX("dxf");
 		
@@ -446,6 +468,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		sm.clearStacks();
 		se.clearEvaluations();
 		sc.clearCharts();
+		sd.clearCharts();
 		
 		File file = FileDialogs.openFileFX("csv");
 
@@ -479,6 +502,7 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 		sm.clearStacks();
 		se.clearEvaluations();
 		sc.clearCharts();
+		sd.clearCharts();
 		sm.clearUnitMix();
 				
 		File file = FileDialogs.openFileFX("csv");
