@@ -22,8 +22,10 @@ import cdr.mesh.toolkit.operators.MeshOperators;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleFloatProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import jdk.nashorn.internal.ir.annotations.Ignore;
 import model.StackAnalysis.AnalysisFloor;
 import model.StackAnalysis.AnalysisFloor.AnalysisUnit;
+import sun.reflect.generics.tree.FloatSignature;
 
 public class StackEvaluator {
 		
@@ -69,6 +71,32 @@ public class StackEvaluator {
 
 		return delta;
 	}
+	
+	private boolean evaluateValidity(Map<Point3D, Stack<AnalysisFloor>> analysisStacks) {
+				
+		Map<String, Integer> counts = new HashMap<>();
+		
+		for (Stack<AnalysisFloor> analysisStack: analysisStacks.values()) {
+			for (AnalysisFloor analysisFloor : analysisStack) {
+				for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
+					
+					if (!counts.containsKey(analysisUnit.getUnitType())) {
+						counts.put(analysisUnit.getUnitType(), 0);
+					}
+					
+					counts.put(analysisUnit.getUnitType(), counts.get(analysisUnit.getUnitType()) + 1);
+				}
+			}
+		}
+		
+		for (Map.Entry<String, Integer> count : counts.entrySet()) {
+			if (count.getKey() != null && count.getValue() > sm.unitCounts.get(count.getKey())) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
 		
 	private void evaluateFloor(AnalysisFloor analysisFloor) {
 		
@@ -89,8 +117,8 @@ public class StackEvaluator {
 			float unitValue = evaluateUnitValue(analysisUnit);
 			float unitDelta = unitValue - unitCost;
 			
-			analysisUnit.addAttribute("unitDelta-total", unitDelta);
-			analysisUnit.addAttribute("unitDelta-m2", unitDelta / unitArea);
+			analysisUnit.addAttribute("unitDelta-total", unitDelta, "\u00A3");
+			analysisUnit.addAttribute("unitDelta-m2", unitDelta / unitArea, "\u00A3");
 		}
 									
 		floorHashes.put(floorHash, analysisFloor.clone());
@@ -118,13 +146,13 @@ public class StackEvaluator {
 				unitValueTotal = unitCap;
 			}
 											
-			analysisUnit.addAttribute("unitValue-base", unitValueBase);
-			analysisUnit.addAttribute("unitValue-premium", unitValuePremium);
-			analysisUnit.addAttribute("unitValue-total", unitValueTotal);
-			analysisUnit.addAttribute("unitValue-m2", unitValueTotal / unitArea);
+			analysisUnit.addAttribute("unitValue-base", unitValueBase, "\u00A3");
+			analysisUnit.addAttribute("unitValue-premium", unitValuePremium, "\u00A3");
+			analysisUnit.addAttribute("unitValue-total", unitValueTotal, "\u00A3");
+			analysisUnit.addAttribute("unitValue-m2", unitValueTotal / unitArea, "\u00A3");
 
-			analysisUnit.addAttribute("unitPremium-visibility", unitVisibilityPremium);
-			analysisUnit.addAttribute("unitPremium-floor", unitFloorPremium);
+			analysisUnit.addAttribute("unitPremium-visibility", unitVisibilityPremium, "\u00A3");
+			analysisUnit.addAttribute("unitPremium-floor", unitFloorPremium, "\u00A3");
 			
 			unitValue = unitValueTotal;
 		} 
@@ -141,9 +169,9 @@ public class StackEvaluator {
 		float unitCostMultiplier = sm.floorplateCostFloorMultiplier * analysisUnit.getFloorIndex();
 		float unitCostTotal =  unitCostBase * (unitCostMultiplier + 1); 
 		
-		analysisUnit.addAttribute("unitCost-base", unitCostBase);
-		analysisUnit.addAttribute("unitCost-total", unitCostTotal);
-		analysisUnit.addAttribute("unitCost-m2", unitCostTotal / unitArea);
+		analysisUnit.addAttribute("unitCost-base", unitCostBase, "\u00A3");
+		analysisUnit.addAttribute("unitCost-total", unitCostTotal, "\u00A3");
+		analysisUnit.addAttribute("unitCost-m2", unitCostTotal / unitArea, "\u00A3");
 		
 		unitCost = unitCostTotal;
 				
@@ -157,9 +185,14 @@ public class StackEvaluator {
 		float totalViewablePoints = 0f;
 		float totalViewedPoints = 0f;
 		
+		Set<Point3D> viewedPoints = new HashSet<>();
+		
 		for (Point3D viewpoint : sm.getViewPoints()) {
 			for (Point3D analysisPoint : analysisUnit.getAnalysisPoints(false)) {
 				if(!rt.obstructed(rt.createRay(analysisPoint, viewpoint))) {
+					
+					viewedPoints.add(viewpoint);
+					
 					totalViewedPoints++;
 				}
 				totalViewablePoints++;
@@ -173,6 +206,9 @@ public class StackEvaluator {
 		float visibilityPremium = analysisUnit.getBaseValue() * visibilityMultiplier;
 		
 		unitVisibilityPremium = visibilityPremium;
+		
+		analysisUnit.addAttribute("unitVisibility-viewPoints", viewedPoints.size(), "pts");
+		analysisUnit.addAttribute("unitVisibility-totalPoints", totalViewedPoints, "pts");
 		
 		return unitVisibilityPremium;		
 	}
@@ -284,28 +320,6 @@ public class StackEvaluator {
 		
 		return mutation;
 	}
-
-	private Set<String> getIterableFloorplateTypes(String footprintType, String floorplateType) {
-		
-		List<String> unitTypes = sm.getUnitTypes(footprintType, floorplateType);
-		List<String> floorplateTypes = new ArrayList<>(sm.getFloorplateTypes(footprintType));
-		Set<String> iterableTypes = new HashSet<>();
-		
-		Collections.sort(unitTypes);
-		
-		for (String testFloorplateType : floorplateTypes) {
-			
-			List<String> testUnitTypes = sm.getUnitTypes(footprintType, testFloorplateType);
-			
-			Collections.sort(testUnitTypes);
-			
-			if (unitTypes.equals(testUnitTypes)) {
-				iterableTypes.add(testFloorplateType);
-			}
-		}
-				
-		return iterableTypes;
-	}
 	
 	private void sortStackFloors() {
 				
@@ -313,13 +327,23 @@ public class StackEvaluator {
 		
 			boolean swapped = true;
 			
-			while (swapped) {
+			int max = 0; // TODO - temporary fix
+			
+			while (swapped && max++ < 4) {
 				
 				swapped = false;
 								
 				for (int s=0; s<sm.getStack(footprint).size(); s++) {
+					
+					// TODO - make iterable types a part of stack manager for speed
+					
+					Set<String> iterableTypes = sm.getIterableFloorplateTypes(
+							sm.getFootprintType(footprint),
+							sm.getStack(footprint).get(s));
+					
 					for (int t=s+1; t<sm.getStack(footprint).size(); t++) {				
-						if (sm.getStack(footprint).get(s) != sm.getStack(footprint).get(t)) {
+						if (sm.getStack(footprint).get(s) != sm.getStack(footprint).get(t) && 
+							!iterableTypes.contains(sm.getStack(footprint).get(t))) {
 							
 							AnalysisFloor sAnalysisFloor = analysis.get(footprint).get(s);
 							AnalysisFloor tAnalysisFloor = analysis.get(footprint).get(t);
@@ -349,7 +373,7 @@ public class StackEvaluator {
 								analysis.get(footprint).set(t, sAnalysisFloorClone);
 								
 								swapped = true;
-								
+																
 								try {
 									 Thread.sleep(sleep);
 								} catch (InterruptedException e) {
@@ -361,9 +385,12 @@ public class StackEvaluator {
 				}
 				
 				for (int s=0; s<sm.getStack(footprint).size(); s++) {
+					
+					Set<String> iterableTypes = sm.getIterableFloorplateTypes(
+							sm.getFootprintType(footprint),
+							sm.getStack(footprint).get(s));
 							
-					for (String iterableType : this.getIterableFloorplateTypes(sm.getFootprintType(footprint), 
-							sm.getStack(footprint).get(s))) {
+					for (String iterableType : iterableTypes) {
 						
 						if (iterableType != sm.getStack(footprint).get(s)) {
 							
@@ -577,7 +604,11 @@ public class StackEvaluator {
 											
 					float delta = evaluateDelta(this.analysis);
 					
-					if (delta > f.getKey()) {					
+					if (!evaluateValidity(this.analysis)) {
+						delta = -Float.MAX_VALUE;
+					}
+					
+					if (delta > f.getKey() || generation == 0) {					
 						elite.put(delta, sm.saveState());	
 						flag = true;
 					}				

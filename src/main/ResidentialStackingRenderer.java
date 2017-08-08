@@ -78,6 +78,9 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 			"unitValue-total",
 			"unitValue-m2",
 			
+			"unitVisibility-viewPoints",
+			"unitVisibility-totalPoints",
+			
 			"unitPremium-visibility",
 			"unitPremium-floor",
 			
@@ -143,6 +146,8 @@ public class ResidentialStackingRenderer extends OpaqueRendererWithGUI{
 					
 					System.out.println(attributes[attributeIndex.get()]);
 				}
+				
+				e.consume();
 			}
 		});
 	}

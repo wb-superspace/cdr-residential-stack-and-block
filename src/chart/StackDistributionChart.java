@@ -14,6 +14,7 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
+import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
@@ -68,7 +69,7 @@ public class StackDistributionChart {
 		this.scatterChart.setHorizontalGridLinesVisible(true);
 		this.scatterChart.setVerticalGridLinesVisible(true);
 		this.scatterChart.setTranslateX(-20);
-				
+						
 		this.se.getGeneration().addListener(new ChangeListener<Number>() {
 
 			@Override
@@ -102,7 +103,7 @@ public class StackDistributionChart {
 				
 		this.scatterChart.getData().clear();
 		this.scatterValueAxis.setLabel(this.attribute.get() + " [\u00A3]");
-		
+				
 		Map<String, XYChart.Series<Number, Number>> scatterSeries = new HashMap<>();
 		
 		for (String unitType : this.sm.getUnitTypes()) {
@@ -112,17 +113,17 @@ public class StackDistributionChart {
 		for (Map.Entry<Point3D, Stack<AnalysisFloor>> analysisEntry : analysisStacks.entrySet()) {	
 						
 			List<AnalysisUnit> analysisUnits = new ArrayList<>();
-			for (AnalysisFloor analysisFloor : analysisEntry.getValue()) {			
+			for (AnalysisFloor analysisFloor : analysisEntry.getValue()) {
 				for (AnalysisUnit analysisUnit : analysisFloor.getAnalysisUnits()) {
 					
 					if (analysisUnit.getUnitType() != null) {
 						
 						analysisUnits.add(analysisUnit);
 						
-						int height = analysisUnit.getFloorIndex();
-						float delta = analysisUnit.getAttribute(attribute.get());
+						float ux = analysisUnit.getFloorIndex();
+						float uy = analysisUnit.getAttribute(attribute.get());
 						
-				        XYChart.Data<Number, Number> dt=  new XYChart.Data<Number, Number>(height, delta);
+				        XYChart.Data<Number, Number> dt=  new XYChart.Data<Number, Number>(ux, uy);
 				        Rectangle rect1 = new Rectangle(5, 5);
 				        
 				        HEXColour x = new HEXColour(sm.unitColors.get(analysisUnit.getUnitType()));	        

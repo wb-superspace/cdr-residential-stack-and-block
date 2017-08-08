@@ -30,10 +30,11 @@ public class StackAnalysis {
 	public static AnalysisAttribute getAnalysisAttribute(Collection<AnalysisUnit> analysisUnits, String attribute) {
 		
 		AnalysisAttribute analysisAttribute = new StackAnalysis().new AnalysisAttribute(attribute);
-		
+				
 		for (AnalysisUnit analysisUnit : analysisUnits) {
 			if (analysisUnit.getUnitType() != null) {
 				analysisAttribute.addValue(analysisUnit.getAttribute(attribute));
+				analysisAttribute.setLabel(analysisUnit.getAttributeLabel(attribute));
 			}
 		}
 		
@@ -134,6 +135,7 @@ public class StackAnalysis {
 	public class AnalysisAttribute {
 		
 		private String attribute;
+		private String label;
 		
 		private Float[] bounds;
 		private List<Float> values;
@@ -141,12 +143,21 @@ public class StackAnalysis {
 		public AnalysisAttribute(String attribute) {
 			
 			this.attribute = attribute;
+			this.label = "";
 			this.bounds = new Float[]{Float.MAX_VALUE, -Float.MAX_VALUE};
 			this.values = new ArrayList<>();
 		}
 		
 		public String getAttribute() {
 			return this.attribute;
+		}
+		
+		public String getLabel() {
+			return this.label;
+		}
+		
+		public void setLabel(String label) {
+			this.label = label;
 		}
 		
 		public Float[] getBounds() {
@@ -171,7 +182,7 @@ public class StackAnalysis {
 			
 			return sum;
 		}
-		
+				
 		public void addValue(Float value) {
 			
 			if (value < bounds[0]) bounds[0] = value;
@@ -390,11 +401,13 @@ public class StackAnalysis {
 			private List<Point3D> analysisPoints;
 			
 			private Map<String, Float> attributes;
+			private Map<String, String> attributeLabels;
 							
 			public AnalysisUnit(Polygon3D unit) {
 				
 				this.unit = unit;			
 				this.attributes = new HashMap<>();
+				this.attributeLabels = new HashMap<>();
 			}
 					
 			@Override
@@ -406,6 +419,7 @@ public class StackAnalysis {
 				
 				AnalysisUnit clone = analysisFloor.new AnalysisUnit(this.unit);
 				clone.attributes = new HashMap<>(this.attributes);
+				clone.attributeLabels = new HashMap<>(this.attributeLabels);
 				
 				return clone;
 			}
@@ -444,12 +458,17 @@ public class StackAnalysis {
 				return AnalysisFloor.this.sm.floorplateCostBase * this.getArea();
 			}
 			
-			public void addAttribute(String attribute, float value) {
+			public void addAttribute(String attribute, float value, String attributeLabel) {
 				this.attributes.put(attribute, value);
+				this.attributeLabels.put(attribute, attributeLabel);
 			}
 			
 			public Float getAttribute(String attribute) {
 				return this.attributes.containsKey(attribute) ? this.attributes.get(attribute) : 0f;
+			}
+			
+			public String getAttributeLabel(String attribute) {
+				return this.attributeLabels.get(attribute);
 			}
 			
 			public Point3D getTagPoint(boolean exploded) {

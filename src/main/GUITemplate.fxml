@@ -57,15 +57,13 @@
 							<VBox>
 								<children>
 									<TitledPane fx:id="stackTitledPane" animated="false" expanded="true" text="stack : " visible="false"/>
-									<TitledPane fx:id="unitsTitledPane" animated="false" expanded="true" text="units : " visible="false"/>
-									<TitledPane fx:id="valueTitledPane" animated="false" expanded="true" text="value : " visible="false"/>
-									<TitledPane fx:id="distributionTitledPane"  animated="false" expanded="true" text="distribution : " visible="false">
+									<TitledPane fx:id="distributionTitledPane"  animated="false" expanded="false" text="distribution : " visible="false">
 										<content>
 											<VBox fx:id="distributionChartVBox">
 											</VBox>
 										</content>
 									</TitledPane>
-									<TitledPane fx:id="legendTitledPane" animated="false" expanded="true" text="legend : " visible="false"/>
+									<TitledPane fx:id="legendTitledPane" animated="false" expanded="false" text="legend : " visible="false"/>
 								</children>
 							</VBox>
 						</content>

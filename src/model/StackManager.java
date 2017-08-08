@@ -1,12 +1,16 @@
 package model;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.sun.jmx.snmp.tasks.ThreadService;
 
 import cdr.geometry.primitives.ArrayVector3D;
 import cdr.geometry.primitives.LineSegment3D;
@@ -30,7 +34,7 @@ public class StackManager {
 	
 	public float maxHeight = Float.MAX_VALUE; 
 	
-	public float floorplateCostBase = 1650f;							// (per m2) CTBUH
+	public float floorplateCostBase = 3000f;							// (per m2) CTBUH
 	
 	public float floorplateCostFloorMultiplier = 0.008f; 				// (8% every 10 floors) CTBUH
 	
@@ -106,6 +110,8 @@ public class StackManager {
 	
 	private Map<Point3D, Stack<String>> stacks = new HashMap<>();
 	
+	private Map<String, Map<String, Set<String>>> iterableFloorplateTypes = new HashMap<>();
+	
 	/*
 	 * Methods
 	 */
@@ -117,6 +123,7 @@ public class StackManager {
 			this.getStack(footprint).clear();
 		}
 		
+		this.setIterableFloorplateTypes();
 		this.saveStacks();
 	}
 	
@@ -155,6 +162,17 @@ public class StackManager {
 	
 	public List<Point3D> getFootprints() {
 		return this.footprints;
+	}
+	
+	public Set<String> getFootprintTypes() {
+		
+		Set<String> footprintTypes = new HashSet<>();
+		
+		for (Point3D footprint : this.getFootprints()) {
+			footprintTypes.add(this.getFootprintType(footprint));
+		}
+		
+		return footprintTypes;
 	}
 	
 	public String getFootprintType(Point3D footprint) {
@@ -237,6 +255,44 @@ public class StackManager {
 	
 	public Set<String> getFloorplateTypes(String footprintType) {
 		return this.floorplates.get(footprintType).keySet();
+	}
+	
+	public Set<String> getIterableFloorplateTypes(String footprintType, String floorplateType) {
+		return this.iterableFloorplateTypes.get(footprintType).get(floorplateType);
+	}
+	
+	private void setIterableFloorplateTypes() {
+		
+		Map<String, Map<String, Set<String>>> iterableFloorplateTypes = new HashMap<>();
+		
+		for (String footprintType : this.getFootprintTypes()) {
+			
+			iterableFloorplateTypes.put(footprintType, new HashMap<>());
+			
+			for (String floorplateType : this.getFloorplateTypes(footprintType)) {
+						
+				List<String> unitTypes = this.getUnitTypes(footprintType, floorplateType);
+				List<String> floorplateTypes = new ArrayList<>(this.getFloorplateTypes(footprintType));
+				Set<String> iterableTypes = new HashSet<>();
+				
+				Collections.sort(unitTypes);
+				
+				for (String testFloorplateType : floorplateTypes) {
+					
+					List<String> testUnitTypes = this.getUnitTypes(footprintType, testFloorplateType);
+					
+					Collections.sort(testUnitTypes);
+					
+					if (unitTypes.equals(testUnitTypes)) {
+						iterableTypes.add(testFloorplateType);
+					}
+				}
+				
+				iterableFloorplateTypes.get(footprintType).put(floorplateType,iterableTypes);
+			}
+		}
+		
+		this.iterableFloorplateTypes = iterableFloorplateTypes;
 	}
 	
 	public String getFloorplateType(Point3D floorplate) {
